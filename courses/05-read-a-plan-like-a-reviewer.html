@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- social:start -->
+<meta name="description" content="Session 5 of 6. Read a Terraform plan the way a reviewer should: the symbols, force-new attributes and replacement, lifecycle guard rails, the dependency graph that sets the apply order, and policy as code. A plan simulator computes every plan and apply order in your browser, and shows how a small plan can still destroy data.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Learn with Phoebe">
+<meta property="og:title" content="Read a plan like a reviewer - learn terraform with phoebe">
+<meta property="og:description" content="Session 5 of 6. A live plan simulator: edit the config, read the plan, watch the apply order come from the graph. 1 to add, 1 to destroy can mean a zone full of data is gone.">
+<meta property="og:url" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/courses/05-read-a-plan-like-a-reviewer.html">
+<meta property="og:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Read a plan like a reviewer - learn terraform with phoebe">
+<meta name="twitter:description" content="Session 5 of 6. Plan symbols, replacements, lifecycle and the graph, on a live simulator.">
+<meta name="twitter:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<!-- social:end -->
+<title>Session 5 · Read a plan like a reviewer - learn terraform with phoebe</title>
+<link rel="stylesheet" href="../assets/style.css?v=2">
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">learn-terraform-with-phoebe</a> / Session 5 of 6</span>
+    <button class="btn" id="toggle-all" type="button">Expand all</button>
+    <button class="btn primary" id="zoom-toggle" type="button">Projector zoom: off</button>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="eyebrow">Learn Terraform with Phoebe · Session 5 of 6</div>
+    <h1>Read a <span class="accent">plan</span> like a reviewer</h1>
+    <p class="sub">A plan is the last moment anyone can stop a change before it happens, and most plans are approved after a glance at the summary line. Tonight you learn to read one properly: the symbols, the attributes that force a resource to be destroyed and rebuilt, the lifecycle settings that guard against that, and the dependency graph that decides what happens first. Then you use a plan simulator that computes every plan and apply order in your browser, and find the rung where "1 to add, 1 to destroy" means a zone full of data is gone.</p>
+    <div class="chip-row">
+      <span class="chip level">🟠 Deeper · bench night</span>
+      <span class="chip audience">Leaders who approve, engineers who write</span>
+      <span class="chip audience">Browser only; CLI optional</span>
+      <span class="chip time">45 min</span>
+    </div>
+    <div class="agenda">
+      <span class="a1" style="flex:1">0-3 · Welcome</span>
+      <span class="a2" style="flex:3">3-15 · Symbols, force-new, lifecycle</span>
+      <span class="a3" style="flex:5">15-40 · The plan simulator</span>
+      <span class="a4" style="flex:1">40-45 · Q&amp;A</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="section" id="intro">
+    <div class="section-kicker">
+      <span class="klabel">Part 0</span>
+      <h2>Where we start</h2>
+    </div>
+    <p class="lede">The running case is constructed. Larkspur Freight's production lake now has two zones, raw and curated, a catalog that reads from curated, and an access grant for analysts on the catalog. Priya, the data lead, approves every infrastructure pull request, and she has been approving them on the summary line. Last week a teammate renamed a resource "to tidy the code", and the plan said 1 to add and 1 to destroy. Tonight is about what that line was hiding, and how to read the rest of a plan before you approve it.</p>
+
+    <div class="legend">
+      <span class="pill">🎫 Clear all three quiz questions to stamp your passport</span>
+      <span class="pill">Live = presented in the 45 minutes</span>
+      <span class="pill">Self-study = the full depth, after class</span>
+      <span class="pill">★ Bench = compute it yourself</span>
+    </div>
+
+    <div class="callout win">
+      <p><strong>★ What you walk out with tonight.</strong> A reading order for any plan, the symbols and what each does to a real object, the attributes that force a rebuild and the three lifecycle settings that change what a rebuild means, the reason the apply order never depends on how the file is written, and a reviewer's checklist with a second number on it: not just how many resources change, but how many that hold data are destroyed.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-1">
+    <div class="section-kicker">
+      <span class="klabel">Part 1 · covers plan symbols and the summary line</span>
+      <h2>Six symbols, and the one line that hides them</h2>
+      <span class="tag concept">4 min live</span>
+    </div>
+    <p class="lede">Every resource in a plan carries a symbol for what will happen to its real object. The summary line then counts them: "Plan: X to add, Y to change, Z to destroy." It counts a replacement twice, once as an add and once as a destroy, so a plan that reads "1 to add, 0 to change, 1 to destroy" may be a harmless swap of two unrelated resources, or one bucket being deleted and recreated empty.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Six plan symbols, each with what happens to the real object. Plus: create a new object. Tilde: update the existing object in place, nothing is rebuilt. Minus slash plus: destroy the old object, then create a replacement; the data in it is gone. Plus slash minus: create the replacement first, then destroy the old one. Minus: destroy. Less-than-equals: read a data source, nothing changes. The two replacement symbols are outlined in red.">
+        <defs>
+          <filter id="w5aSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="51" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w5aHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+        </defs>
+        <style>
+          .w5aH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w5aL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w5aS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w5aV { font: 800 18px "JetBrains Mono", Menlo, monospace; fill: #4A2478; }
+          .w5aR { font: 800 18px "JetBrains Mono", Menlo, monospace; fill: #991B1B; }
+          .w5aB { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w5aN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w5aH" x="30" y="26">WHAT EACH SYMBOL DOES TO THE REAL OBJECT</text>
+
+        <g filter="url(#w5aSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="44" width="265" height="110" rx="10" transform="rotate(-0.5 162 99)" fill="#FFFFFF"/>
+          <rect x="308" y="44" width="265" height="110" rx="10" transform="rotate(0.4 440 99)" fill="#FFFFFF"/>
+          <rect x="586" y="44" width="265" height="110" rx="10" transform="rotate(-0.4 718 99)" fill="#FEF2F2" stroke="#991B1B"/>
+          <rect x="30" y="170" width="265" height="110" rx="10" transform="rotate(0.5 162 225)" fill="#FEF2F2" stroke="#991B1B"/>
+          <rect x="308" y="170" width="265" height="110" rx="10" transform="rotate(-0.4 440 225)" fill="#FFFFFF"/>
+          <rect x="586" y="170" width="265" height="110" rx="10" transform="rotate(0.4 718 225)" fill="#F4EEFB"/>
+          <rect x="220" y="76" width="54" height="40" rx="6" fill="url(#w5aHc)"/>
+          <rect x="498" y="76" width="54" height="40" rx="6" fill="url(#w5aHc)"/>
+          <rect x="776" y="76" width="54" height="40" rx="6" fill="#FFFFFF"/>
+          <rect x="220" y="202" width="54" height="40" rx="6" fill="url(#w5aHc)"/>
+          <rect x="498" y="202" width="54" height="40" rx="6" stroke-dasharray="4 4" fill="#FFFFFF"/>
+        </g>
+
+        <text class="w5aV" x="48" y="80">+</text>
+        <text class="w5aL" x="48" y="106">create</text>
+        <text class="w5aS" x="48" y="126">a new object appears</text>
+        <text class="w5aV" x="326" y="80">~</text>
+        <text class="w5aL" x="326" y="106">update in-place</text>
+        <text class="w5aS" x="326" y="126">same object, edited</text>
+        <text class="w5aR" x="604" y="80">-/+</text>
+        <text class="w5aL" x="604" y="106">destroy, then create</text>
+        <text class="w5aB" x="604" y="126">contents gone, a gap</text>
+        <text class="w5aS" x="604" y="142">the default replace</text>
+        <text class="w5aR" x="48" y="206">+/-</text>
+        <text class="w5aL" x="48" y="232">create, then destroy</text>
+        <text class="w5aB" x="48" y="252">still a new, empty object</text>
+        <text class="w5aS" x="48" y="268">create_before_destroy</text>
+        <text class="w5aV" x="326" y="206">-</text>
+        <text class="w5aL" x="326" y="232">destroy</text>
+        <text class="w5aS" x="326" y="252">the object is removed</text>
+        <text class="w5aV" x="604" y="206">&lt;=</text>
+        <text class="w5aL" x="604" y="232">read (data sources)</text>
+        <text class="w5aS" x="604" y="252">reads, never changes</text>
+
+        <text class="w5aN" x="30" y="306">A replacement is counted once in "to add" and once in "to destroy". The summary line cannot tell you which.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - the two red panels are the ones a reviewer must find before reading anything else</figcaption>
+    </figure>
+
+    <details class="card" open>
+      <summary><span class="mode live">Live</span>A reading order for any plan<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p><strong>1. The summary line,</strong> for scale only. <strong>2. Every <code>-/+</code>, <code>+/-</code> and <code>-</code>,</strong> by searching the plan for "must be replaced" and "will be destroyed". <strong>3. For each replacement, the attribute marked <code># forces replacement</code>:</strong> is that the change the author meant to make? <strong>4. For each destroy, the reason line</strong> Terraform prints under it, such as "because local_file.zone is not in configuration": a rename without a moved block reads exactly like that. <strong>5. Then the <code>~</code> updates,</strong> which are usually what the pull request said it was doing.</p>
+        <p>The order matters because the dangerous lines are short and the safe ones are long. An update to forty tags fills a screen; the destroy of a raw zone is five lines in the middle of it.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>Where the symbols are written down<span class="mini">2 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>HashiCorp's plan command page shows <code>+</code>, <code>-</code>, <code>~</code> and <code>-/+</code> with an example ending "Plan: 2 to add, 1 to change, 2 to destroy." and an attribute annotated <code># forces replacement</code>. The full legend, including <code>+/- create replacement and then destroy</code> and <code>&lt;= read (data resources)</code>, is printed by Terraform itself at the top of a plan that uses them; both appear in the real runs in sessions 2 and 5. The legend lists only the symbols that particular plan uses.</p>
+        <p>For a machine reader, <code>terraform show -json</code> on a saved plan gives the same information as a list of actions per resource, which is what policy tools read (Part 4).</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>The tidy-up rename.</strong> Renaming a resource block is the most common way a harmless-looking pull request destroys something. The code diff is one word. The plan says one resource will be created and one destroyed, "because it is not in configuration". Session 3 ran it for real: renaming three zones without a moved block planned "3 to add, 0 to change, 3 to destroy". With a moved block the same rename planned nothing at all. Rungs 2 and 3 of the bench below reproduce it.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-2">
+    <div class="section-kicker">
+      <span class="klabel">Part 2 · covers force-new attributes and the lifecycle meta-argument</span>
+      <h2>When a change means a rebuild, and three ways to steer it</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">Some attributes cannot be changed on a live object. The provider marks them force-new: change one and the only way to get there is to destroy the object and create another. For storage that is the attribute that matters most, because a new bucket is an empty bucket. The <code>lifecycle</code> block, available on every resource, changes how Terraform handles that moment.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A decision tree for one changed attribute. Is the attribute force-new for this resource type? If no, update in place. If yes, is prevent_destroy set? If yes, the plan errors and nothing is applied. If no, is create_before_destroy set? If yes, create the new object then destroy the old. If no, destroy the old object then create the new. Separately, ignore_changes removes the attribute from the comparison before any of this.">
+        <defs>
+          <filter id="w5bSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="53" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <marker id="w5bAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w5bH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w5bL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w5bS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w5bB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w5bR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w5bA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w5bN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w5bH" x="30" y="26">ONE CHANGED ATTRIBUTE, FOLLOWED THROUGH THE RULES</text>
+
+        <g filter="url(#w5bSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="56" width="190" height="56" rx="10" transform="rotate(-0.6 125 84)" fill="#F4EEFB"/>
+          <rect x="30" y="160" width="190" height="56" rx="10" transform="rotate(0.5 125 188)" fill="#FFFFFF"/>
+          <rect x="290" y="160" width="190" height="56" rx="10" transform="rotate(-0.5 385 188)" fill="#FFFFFF"/>
+          <rect x="560" y="44" width="290" height="50" rx="10" transform="rotate(0.5 705 69)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="560" y="120" width="290" height="50" rx="10" transform="rotate(-0.4 705 145)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="560" y="196" width="290" height="50" rx="10" transform="rotate(0.4 705 221)" fill="#FEF2F2" stroke="#991B1B"/>
+          <rect x="560" y="272" width="290" height="50" rx="10" transform="rotate(-0.5 705 297)" fill="#FEF2F2" stroke="#991B1B"/>
+          <path d="M125 116 L125 154" marker-end="url(#w5bAr)"/>
+          <path d="M224 176 C400 120 470 80 554 72" marker-end="url(#w5bAr)"/>
+          <path d="M224 196 L284 196" marker-end="url(#w5bAr)"/>
+          <path d="M484 176 C510 160 530 150 554 146" marker-end="url(#w5bAr)"/>
+          <path d="M484 200 C510 210 530 218 554 220" marker-end="url(#w5bAr)"/>
+          <path d="M385 220 C385 270 470 296 554 296" marker-end="url(#w5bAr)"/>
+        </g>
+
+        <text class="w5bL" x="44" y="80">ignore_changes lists it?</text>
+        <text class="w5bS" x="44" y="98">yes: dropped from the diff</text>
+        <text class="w5bL" x="44" y="184">Is it force-new</text>
+        <text class="w5bL" x="44" y="200">for this type?</text>
+        <text class="w5bL" x="304" y="184">prevent_destroy</text>
+        <text class="w5bL" x="304" y="200">set to true?</text>
+        <text class="w5bB" x="576" y="74">~ update in place: nothing rebuilt</text>
+        <text class="w5bB" x="576" y="150">plan errors: nothing is applied</text>
+        <text class="w5bR" x="576" y="218">+/- create_before_destroy: new first</text>
+        <text class="w5bS" x="576" y="234">the old object still goes</text>
+        <text class="w5bR" x="576" y="302">-/+ default: destroy, then create</text>
+        <text class="w5bA" x="140" y="140">no</text>
+        <text class="w5bA" x="400" y="142">no</text>
+        <text class="w5bA" x="248" y="190">yes</text>
+        <text class="w5bA" x="520" y="148">yes</text>
+        <text class="w5bA" x="518" y="232">no, cbd</text>
+        <text class="w5bA" x="362" y="262">no</text>
+
+        <text class="w5bN" x="30" y="334">Neither red outcome keeps the data. create_before_destroy changes when the gap happens, not whether the contents survive.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - only prevent_destroy stops a rebuild; the others change its shape</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>prevent_destroy and create_before_destroy<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p><strong>prevent_destroy = true</strong> makes Terraform reject any plan that would destroy the object, including a replacement. HashiCorp's docs add the caveat every reviewer should know: it does not stop a destroy when the resource configuration itself is removed, because the guard lives in the block that is being deleted. Real Terraform 1.17.1, on a stand-in resource whose region changed:</p>
+        <div class="prompt-box good"><span class="label">★ Real run · prevent_destroy</span>$ terraform plan
+Error: Instance cannot be destroyed
+
+  on main.tf line 1:
+   1: resource "terraform_data" "raw_zone" {
+
+Resource terraform_data.raw_zone has lifecycle.prevent_destroy set, but the
+plan calls for this resource to be destroyed. To avoid this error and
+continue with the plan, either disable lifecycle.prevent_destroy or reduce
+the scope of the plan using the -target option.</div>
+        <p><strong>create_before_destroy = true</strong> flips the order of a replacement: the new object first, then the old one, now called "deposed". It shortens downtime for things like a server behind a load balancer. For a bucket it does not save the contents, and it fails if the name must be unique and both would exist at once. The same change, swapped to create_before_destroy, really applied:</p>
+        <div class="prompt-box good"><span class="label">★ Real run · create_before_destroy</span>+/- create replacement and then destroy
+...
+terraform_data.raw_zone: Creating...
+terraform_data.raw_zone: Creation complete after 0s [id=6675ecfc-259a-be0a-cbdd-2b7d54838823]
+terraform_data.raw_zone (deposed object d29179ca): Destroying... [id=41e49c6e-347c-dc64-8b9f-dc72ab0585d3]
+terraform_data.raw_zone: Destruction complete after 0s
+Apply complete! Resources: 1 added, 0 changed, 1 destroyed.</div>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>ignore_changes and replace_triggered_by<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p><strong>ignore_changes</strong> removes listed attributes from the comparison, or every attribute with <code>all</code>. It has honest uses: an attribute another system manages on purpose, such as tags written by a cost tool or a size changed by an autoscaler, would otherwise be reverted on every apply. The danger is the wide version. <code>ignore_changes = all</code> means the config stops describing the object at all; a console edit stays forever and no plan will show it. The bench's anti-lever measures exactly that.</p>
+        <p><strong>replace_triggered_by</strong> (Terraform 1.2 and later) goes the other way: it forces a replacement when some other resource or attribute changes, for objects that must be rebuilt when a dependency changes even though none of their own arguments did.</p>
+      </div>
+    </details>
+
+    <div class="callout tip">
+      <p><strong>Which attributes are force-new is a provider fact, not a guess.</strong> Each provider's docs mark them. For example the AWS provider documents <code>bucket</code> on <code>aws_s3_bucket</code> as "Forces new resource", and Google's storage bucket schema sets ForceNew on <code>name</code> and <code>location</code>. Tags are updated in place on both. When in doubt, the plan's <code># forces replacement</code> marker is the answer for your exact provider version.</p>
+    </div>
+  </section>
+
+  <section class="section" id="bench">
+    <div class="section-kicker">
+      <span class="klabel">Build-along · the bench</span>
+      <h2>The plan simulator</h2>
+      <span class="tag demo">★ 25 min · the main event</span>
+    </div>
+    <p class="lede">The simulator holds Larkspur's production state and a config you can edit. Every time the config or the state changes, it parses the config, diffs it against the state using each type's force-new rules, applies the lifecycle settings and moved blocks, and computes the apply order as a topological sort of the dependency graph. Nothing is looked up from a table of answers. Work down the ten rungs in order, and for each one say what the summary line says, then what the second counter says, before you move on.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The ten rungs of the bench as ten cells, each with its add, change, destroy counts and its data-bearing destroyed count. Rung 1: 1, 0, 0 and 0. Rung 2: 1, 0, 1 and 1. Rung 3: 0, 0, 0 and 0. Rung 4: 1, 0, 1 and 1. Rung 5: error, 0. Rung 6: 1, 0, 1 and 1. Rung 7: 0, 1, 0 and 0. Rung 8: 2, 0, 2 and 1. Rung 9: 0, 1, 0 and 0. Rung 10: 0, 0, 0, data 0 but drift 1. Rungs 2, 4, 6 and 8 are red.">
+        <defs>
+          <filter id="w5cSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="57" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+        </defs>
+        <style>
+          .w5cH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w5cL { font: 700 11px Inter, sans-serif; fill: #221A2E; }
+          .w5cS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w5cV { font: 800 14px Inter, sans-serif; fill: #4A2478; }
+          .w5cR { font: 800 14px Inter, sans-serif; fill: #991B1B; }
+          .w5cA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w5cN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w5cH" x="30" y="26">THE LADDER: SUMMARY LINE ON TOP, DATA-BEARING ZONES DESTROYED BELOW</text>
+
+        <g filter="url(#w5cSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="54" width="74" height="130" rx="8" fill="#FFFFFF"/>
+          <rect x="114" y="54" width="74" height="130" rx="8" fill="#FEF2F2" stroke="#991B1B"/>
+          <rect x="198" y="54" width="74" height="130" rx="8" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="282" y="54" width="74" height="130" rx="8" fill="#FEF2F2" stroke="#991B1B"/>
+          <rect x="366" y="54" width="74" height="130" rx="8" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="450" y="54" width="74" height="130" rx="8" fill="#FEF2F2" stroke="#991B1B"/>
+          <rect x="534" y="54" width="74" height="130" rx="8" fill="#FFFFFF"/>
+          <rect x="618" y="54" width="74" height="130" rx="8" fill="#FEF2F2" stroke="#991B1B"/>
+          <rect x="702" y="54" width="74" height="130" rx="8" fill="#FFFFFF"/>
+          <rect x="786" y="54" width="74" height="130" rx="8" fill="#F4EEFB" stroke="#7B42BC"/>
+          <path d="M38 132 L96 132 M122 132 L180 132 M206 132 L264 132 M290 132 L348 132 M374 132 L432 132 M458 132 L516 132 M542 132 L600 132 M626 132 L684 132 M710 132 L768 132 M794 132 L852 132" stroke="#D6CEE2" stroke-width="1.2"/>
+        </g>
+
+        <text class="w5cA" x="67" y="74" text-anchor="middle">rung 1</text>
+        <text class="w5cA" x="151" y="74" text-anchor="middle">rung 2</text>
+        <text class="w5cA" x="235" y="74" text-anchor="middle">rung 3</text>
+        <text class="w5cA" x="319" y="74" text-anchor="middle">rung 4</text>
+        <text class="w5cA" x="403" y="74" text-anchor="middle">rung 5</text>
+        <text class="w5cA" x="487" y="74" text-anchor="middle">rung 6</text>
+        <text class="w5cA" x="571" y="74" text-anchor="middle">rung 7</text>
+        <text class="w5cA" x="655" y="74" text-anchor="middle">rung 8</text>
+        <text class="w5cA" x="739" y="74" text-anchor="middle">rung 9</text>
+        <text class="w5cA" x="823" y="74" text-anchor="middle">rung 10</text>
+        <text class="w5cV" x="67" y="110" text-anchor="middle">1/0/0</text>
+        <text class="w5cV" x="151" y="110" text-anchor="middle">1/0/1</text>
+        <text class="w5cV" x="235" y="110" text-anchor="middle">0/0/0</text>
+        <text class="w5cV" x="319" y="110" text-anchor="middle">1/0/1</text>
+        <text class="w5cV" x="403" y="110" text-anchor="middle">error</text>
+        <text class="w5cV" x="487" y="110" text-anchor="middle">1/0/1</text>
+        <text class="w5cV" x="571" y="110" text-anchor="middle">0/1/0</text>
+        <text class="w5cV" x="655" y="110" text-anchor="middle">2/0/2</text>
+        <text class="w5cV" x="739" y="110" text-anchor="middle">0/1/0</text>
+        <text class="w5cV" x="823" y="110" text-anchor="middle">0/0/0</text>
+        <text class="w5cV" x="67" y="160" text-anchor="middle">0</text>
+        <text class="w5cR" x="151" y="160" text-anchor="middle">1</text>
+        <text class="w5cV" x="235" y="160" text-anchor="middle">0</text>
+        <text class="w5cR" x="319" y="160" text-anchor="middle">1</text>
+        <text class="w5cV" x="403" y="160" text-anchor="middle">0</text>
+        <text class="w5cR" x="487" y="160" text-anchor="middle">1</text>
+        <text class="w5cV" x="571" y="160" text-anchor="middle">0</text>
+        <text class="w5cR" x="655" y="160" text-anchor="middle">1</text>
+        <text class="w5cV" x="739" y="160" text-anchor="middle">0</text>
+        <text class="w5cV" x="823" y="160" text-anchor="middle">0</text>
+        <text class="w5cS" x="823" y="176" text-anchor="middle">drift 1</text>
+        <text class="w5cS" x="30" y="206">top: add / change / destroy</text>
+        <text class="w5cS" x="30" y="222">bottom: data-bearing zones destroyed</text>
+
+        <text class="w5cN" x="390" y="214">Rungs 2, 4 and 6 have the same summary line as a harmless swap.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - three different rungs print "1/0/1"; only the second counter tells them apart from a safe change</figcaption>
+    </figure>
+
+    <div id="plan-bench" class="pl-bench" data-live-bench data-rung="1"></div>
+
+    <div class="callout tip">
+      <p><strong>Read each rung in this order.</strong> The verdict line, then the two headline counters, then the plan text, then the apply order and the graph. On rung 4 the summary is "1 to add, 0 to change, 1 to destroy" and the second counter says 1 data-bearing zone destroyed; on rung 6 the summary and the counter are identical and only the apply order differs.</p>
+    </div>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>Walking the ladder<span class="mini">12 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p><strong>Rung 1, add one zone:</strong> 1 to add, nothing else; the serving zone has no dependencies, so the apply order is one step. <strong>Rung 2, rename raw to landing with no moved block:</strong> 1 to add, 1 to destroy, and 1 data-bearing zone destroyed. The new zone even has the same name; Terraform does not know it is the same thing, because the address changed and nothing said so. <strong>Rung 3, the same rename with a moved block:</strong> "No changes", and the plan says raw has moved to landing.</p>
+        <p><strong>Rung 4, change raw's region:</strong> region is force-new, so 1 to add, 1 to destroy, 1 replacement, 1 zone holding data destroyed. The apply order is destroy the old object, then create the replacement. <strong>Rung 5, the same with prevent_destroy:</strong> the plan stops with "Instance cannot be destroyed"; the counters read 0 and nothing runs. <strong>Rung 6, the same with create_before_destroy:</strong> identical counts, the symbol becomes <code>+/-</code>, and the apply order flips to create the replacement, then destroy the deposed object. The data is still destroyed.</p>
+        <p><strong>Rung 7, tags only:</strong> 0 to add, 1 to change, 0 to destroy; an in-place update. <strong>Rung 8, rename the curated bucket:</strong> curated's name is force-new, and the catalog's storage_root reads that name, so the catalog must be replaced too: 2 to add, 2 to destroy, 1 data-bearing zone destroyed. The apply order destroys the catalog before the zone it depends on, then creates the zone before the catalog. The grant on the catalog is untouched, because the catalog's own name did not change.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>The anti-lever and the break button<span class="mini">5 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p><strong>Rung 9:</strong> someone has added a vendor tag to raw in the console. With a plain config, the plan puts the tags back: 0 to add, 1 to change. <strong>Rung 10, the anti-lever:</strong> add <code>ignore_changes = all</code> to raw and the plan says "No changes", while the third counter, unmanaged drift, reads 1. Now press "Console edit": retention is cut from 30 to 7 days, the plan still says "No changes", and drift rises to 2. Press the same button on rung 1 and the plan grows instead, with drift at 0. The honest nuance is on the widget: ignore_changes on a single attribute that another system owns is a real tool; <code>all</code> on a data zone is a config that has stopped describing it.</p>
+        <p><strong>The break button,</strong> "Shuffle declaration order", rewrites the config with its blocks in a different order. The plan and the apply order must not change, and they do not: order comes from the graph, never from the file. The canon behind this page checked five shuffles of every rung in two independent engines.</p>
+      </div>
+    </details>
+  </section>
+
+  <section class="section" id="part-3">
+    <div class="section-kicker">
+      <span class="klabel">Part 3 · covers the dependency graph and apply order</span>
+      <h2>The graph decides what happens first</h2>
+      <span class="tag concept">3 min live</span>
+    </div>
+    <p class="lede">Terraform builds a graph from every reference in the config (an implicit dependency) and every <code>depends_on</code> (an explicit one). Apply walks it so that nothing is created before what it needs; destroy walks it backwards so that nothing is removed while something still depends on it. Steps with no path between them can run at the same time, up to ten by default.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rung 8 drawn as a graph. lake_zone.curated on the left, catalog.main in the middle referring to curated's name, access_grant.analysts on the right referring to the catalog's name. Curated and the catalog are both replaced. The apply order is numbered: 1 destroy catalog.main, 2 destroy lake_zone.curated, 3 create lake_zone.curated, 4 create catalog.main. The grant has no change.">
+        <defs>
+          <filter id="w5dSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="59" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w5dHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w5dAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w5dAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w5dH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w5dL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w5dS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w5dR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w5dB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w5dA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w5dN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w5dH" x="30" y="26">RUNG 8: TWO REPLACEMENTS, ONE ORDER</text>
+
+        <g filter="url(#w5dSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="40" y="60" width="210" height="64" rx="10" transform="rotate(-0.6 145 92)" fill="url(#w5dHc)" stroke="#991B1B"/>
+          <rect x="340" y="60" width="210" height="64" rx="10" transform="rotate(0.5 445 92)" fill="#FEF2F2" stroke="#991B1B"/>
+          <rect x="640" y="60" width="210" height="64" rx="10" transform="rotate(-0.4 745 92)" fill="#FFFFFF"/>
+          <path d="M336 92 L256 92" marker-end="url(#w5dAr)"/>
+          <path d="M636 92 L556 92" marker-end="url(#w5dAr)"/>
+          <rect x="40" y="160" width="810" height="88" rx="10" transform="rotate(0.2 445 204)" fill="#F4EEFB"/>
+          <path d="M150 210 L222 210" stroke="#0F766E" marker-end="url(#w5dAt)"/>
+          <path d="M350 210 L422 210" stroke="#0F766E" marker-end="url(#w5dAt)"/>
+          <path d="M560 210 L632 210" stroke="#0F766E" marker-end="url(#w5dAt)"/>
+        </g>
+
+        <text class="w5dL" x="145" y="88" text-anchor="middle">lake_zone.curated</text>
+        <text class="w5dR" x="145" y="106" text-anchor="middle">replace · holds data</text>
+        <text class="w5dL" x="445" y="88" text-anchor="middle">catalog.main</text>
+        <text class="w5dR" x="445" y="106" text-anchor="middle">replace: storage_root</text>
+        <text class="w5dL" x="745" y="88" text-anchor="middle">access_grant.analysts</text>
+        <text class="w5dS" x="745" y="106" text-anchor="middle">no change</text>
+        <text class="w5dA" x="296" y="82" text-anchor="middle">needs</text>
+        <text class="w5dA" x="596" y="82" text-anchor="middle">needs</text>
+        <text class="w5dA" x="56" y="182">APPLY ORDER, AS THE BENCH PRINTS IT</text>
+        <text class="w5dR" x="56" y="214">1 destroy catalog</text>
+        <text class="w5dR" x="232" y="214">2 destroy curated</text>
+        <text class="w5dB" x="434" y="214">3 create curated</text>
+        <text class="w5dB" x="644" y="214">4 create catalog</text>
+        <text class="w5dS" x="56" y="236">destroys run against the arrows; creates run with them</text>
+
+        <text class="w5dN" x="30" y="282">The catalog goes first and comes back last, because it is the one that needs the other.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - the order is not written anywhere in the config; it falls out of one reference</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>Implicit references, and depends_on as a last resort<span class="mini">2 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Writing <code>storage_root = lake_zone.curated.name</code> both passes a value and declares a dependency. HashiCorp's guidance is to rely on references like this, and to use <code>depends_on</code> only "as a last resort", for hidden dependencies Terraform cannot see, such as a job that must wait for a permission whose value it never reads. In the bench, the catalog's <code>depends_on = [lake_zone.raw]</code> is that kind of edge: it changes the order of creates and destroys, never a value.</p>
+        <p>You saw the same thing with the real CLI in session 1: <code>terraform graph</code> printed one edge from the file to the random id, and destroy removed the file first.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>Parallel walks and why the bench lists ties by address<span class="mini">2 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Real Terraform walks the graph concurrently: <code>-parallelism</code> limits the number of concurrent operations and defaults to 10. When two steps have no path between them, as in rung 2 (create landing, destroy raw), they may run at the same moment, and log lines can appear in either order between runs. The simulator has to print one list, so it breaks ties by address; that tie-break is the only thing on the widget not taken from Terraform's rules, and the widget says so.</p>
+      </div>
+    </details>
+  </section>
+
+  <section class="section" id="part-4">
+    <div class="section-kicker">
+      <span class="klabel">Part 4 · covers policy as code, blast radius and the runner's permissions</span>
+      <h2>A reviewer's checklist, partly automated</h2>
+      <span class="tag concept">3 min live</span>
+    </div>
+    <p class="lede">A person reading plans will eventually skim one. Policy as code puts the rules that must never be skimmed into a program that reads every plan: HCP Terraform supports Sentinel, HashiCorp's own policy language, and Open Policy Agent with its Rego language. Writing those policies is beyond these pages; knowing what to ask of them is not.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A gate between plan and apply. The saved plan is turned into JSON. A policy check reads it: no destroy of a data-bearing resource without an exception, no public bucket, required tags present. Then a human reviewer reads the plan with the two counters. Only then does a runner with narrow permissions apply. A failing policy stops the line before the human.">
+        <defs>
+          <filter id="w5eSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="61" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <marker id="w5eAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w5eAx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#991B1B" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w5eH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w5eL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w5eS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w5eB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w5eR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w5eN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w5eH" x="30" y="26">FOUR CHECKPOINTS BETWEEN A PLAN AND A CHANGE</text>
+
+        <g filter="url(#w5eSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="56" width="170" height="120" rx="10" transform="rotate(-0.6 115 116)" fill="#FFFFFF"/>
+          <rect x="240" y="56" width="190" height="120" rx="10" transform="rotate(0.5 335 116)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="470" y="56" width="180" height="120" rx="10" transform="rotate(-0.5 560 116)" fill="#F4EEFB"/>
+          <rect x="690" y="56" width="160" height="120" rx="10" transform="rotate(0.6 770 116)" fill="#FFFFFF"/>
+          <path d="M204 116 L234 116" marker-end="url(#w5eAr)"/>
+          <path d="M434 116 L464 116" marker-end="url(#w5eAr)"/>
+          <path d="M654 116 L684 116" marker-end="url(#w5eAr)"/>
+          <path d="M335 182 L335 218" stroke="#991B1B" marker-end="url(#w5eAx)"/>
+        </g>
+
+        <text class="w5eL" x="46" y="84">saved plan</text>
+        <text class="w5eS" x="46" y="104">plan -out=tfplan</text>
+        <text class="w5eS" x="46" y="122">show -json tfplan</text>
+        <text class="w5eS" x="46" y="140">actions per resource</text>
+        <text class="w5eL" x="256" y="84">policy as code</text>
+        <text class="w5eS" x="256" y="104">Sentinel or OPA</text>
+        <text class="w5eB" x="256" y="124">no data destroy</text>
+        <text class="w5eB" x="256" y="140">without an exception</text>
+        <text class="w5eS" x="256" y="158">tags, no public access</text>
+        <text class="w5eL" x="486" y="84">human review</text>
+        <text class="w5eS" x="486" y="104">reading order, Part 1</text>
+        <text class="w5eS" x="486" y="122">both counters</text>
+        <text class="w5eS" x="486" y="140">blast radius, cost</text>
+        <text class="w5eL" x="706" y="84">apply</text>
+        <text class="w5eS" x="706" y="104">by a runner whose</text>
+        <text class="w5eS" x="706" y="122">role can touch only</text>
+        <text class="w5eS" x="706" y="140">this platform</text>
+        <text class="w5eR" x="352" y="214">fail: stop before a human spends time</text>
+
+        <text class="w5eN" x="30" y="258">The runner's role is the outer limit on any plan: a mistake cannot destroy what the runner cannot reach.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - the program catches the rule every time; the person catches what no rule anticipated</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>Blast radius and cost, in plain questions<span class="mini">2 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p><strong>Blast radius</strong> is how much one plan can break. Ask: how many resources does this state file hold, and does a mistake in it reach production data? Smaller states, split by environment and by layer (session 6), keep the radius small; one giant state for everything means every plan is a plan against everything. <strong>Cost</strong> is the other quiet line: a plan that adds a warehouse or changes a size class changes the bill, and cost-estimation tools read the same plan JSON as policy tools.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>Least privilege for the Terraform runner<span class="mini">2 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Whatever identity runs <code>terraform apply</code> can do anything its permissions allow, whatever the plan says. Give the pipeline's role only the services and resource names its configuration manages, keep a separate role per environment so a dev pipeline cannot touch prod, and keep a read-only role for plans on pull requests. Designing the roles themselves, and access for the people and tools that use the data, belongs to <a href="https://phoebefu6.github.io/learn-data-access-control-with-phoebe/">Data Access Control ↗</a>; here the point is only that the runner is the outer fence on every plan.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>The rule a team writes after its first lost bucket.</strong> The first policy many data teams adopt is the one rung 2 argues for: any plan that deletes or replaces a storage resource fails unless the pull request carries an explicit, reviewed exception. It turns the bench's second counter into a gate. Whether to write it in Sentinel or OPA depends on where the team runs Terraform, which session 6 covers.</p>
+    </div>
+  </section>
+
+  <section class="section" id="exercise">
+    <div class="section-kicker">
+      <span class="klabel">Homework</span>
+      <h2>Before session 6</h2>
+      <span class="tag exercise">30 min</span>
+    </div>
+    <ol>
+      <li><strong>Break the bench on purpose.</strong> On rung 1, edit the config so the access grant targets a resource that does not exist. Read the error, then fix it. Then try making a cycle with two depends_on lines and read that error too.</li>
+      <li><strong>Find a hidden replacement.</strong> Starting from rung 7, change two attributes on curated at once, one in place and one force-new. Predict both counters before you look.</li>
+      <li><strong>Run the real CLI.</strong> In your session 2 folder, change a zone's filename and run <code>terraform plan</code>. Find the <code># forces replacement</code> marker and write the reviewer's one-line summary of the plan.</li>
+      <li><strong>Draft your team's first policy in plain words.</strong> One sentence each: what must never be destroyed without an exception, and who grants the exception.</li>
+    </ol>
+  </section>
+
+  <section class="section" id="quiz">
+    <div class="section-kicker">
+      <span class="klabel">Check yourself</span>
+      <h2>Three questions</h2>
+    </div>
+    <p>Clear all three and session 5 gets stamped in your passport.</p>
+
+    <div class="quiz-q" data-answer="1">
+      <p class="qtext">1 · A pull request renames <code>lake_zone.raw</code> to <code>lake_zone.landing</code> and the plan says "Plan: 1 to add, 0 to change, 1 to destroy." What should the reviewer ask for?</p>
+      <button class="qopt" type="button">A · Nothing; one add and one destroy cancel out</button>
+      <button class="qopt" type="button">B · A moved block from raw to landing, after which the plan should show no changes</button>
+      <button class="qopt" type="button">C · create_before_destroy, so the new zone exists before the old one goes</button>
+      <button class="qopt" type="button">D · ignore_changes = all on the new zone</button>
+      <p class="qwhy">Without a moved block Terraform sees an unrelated new resource and a removed one, so the raw zone is destroyed and an empty one created. The moved block re-addresses the existing object in state (bench rung 3: No changes). C still destroys the data, just later; D hides the zone from future plans.</p>
+    </div>
+
+    <div class="quiz-q" data-answer="3">
+      <p class="qtext">2 · On the bench, rung 6 adds create_before_destroy to the region change. What changes compared with rung 4?</p>
+      <button class="qopt" type="button">A · The data-bearing destroyed counter falls to 0</button>
+      <button class="qopt" type="button">B · The plan errors and nothing is applied</button>
+      <button class="qopt" type="button">C · The resource is updated in place instead of replaced</button>
+      <button class="qopt" type="button">D · The symbol becomes +/- and the apply order flips to create the replacement first; the counts, including 1 data-bearing zone destroyed, stay the same</button>
+      <p class="qwhy">create_before_destroy changes when the old object goes, not whether it goes. The new zone is still a new, empty object. B describes prevent_destroy (rung 5); C would need the attribute to be in-place, like tags (rung 7).</p>
+    </div>
+
+    <div class="quiz-q" data-answer="0">
+      <p class="qtext">3 · You press "Shuffle declaration order" on any rung. Why do the plan and the apply order stay exactly the same?</p>
+      <button class="qopt" type="button">A · The order comes from the dependency graph built from references and depends_on, not from the order of blocks in the file</button>
+      <button class="qopt" type="button">B · The bench remembers the first order it computed</button>
+      <button class="qopt" type="button">C · Terraform sorts every plan alphabetically and applies in that order</button>
+      <button class="qopt" type="button">D · Shuffling only changes comments</button>
+      <p class="qwhy">The graph is the same whatever the file order, so the topological sort is the same. Alphabetical order is only the simulator's tie-break between steps with no path between them; real Terraform runs those in parallel.</p>
+    </div>
+
+    <p class="quiz-score"></p>
+  </section>
+
+  <section class="section" id="official">
+    <div class="section-kicker">
+      <span class="klabel">Sources covered</span>
+      <h2>What this session teaches, and where it came from</h2>
+    </div>
+    <div class="covered">
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform Associate (004) exam content list</span><span class="note">Objectives 3d (generate and review a plan), 4f (resource dependencies), 8b (governance, as concepts), read at developer.hashicorp.com</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform docs: plan command, lifecycle meta-argument, depends_on, graph, apply</span><span class="note">Symbols, summary line, forces replacement, prevent_destroy and its caveat, create_before_destroy, ignore_changes and all, replace_triggered_by (1.2), depends_on as a last resort, parallelism default 10; read at source</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform 1.17.1, real runs</span><span class="note">The prevent_destroy error and the create_before_destroy apply log on this page; the full legend for +/- and &lt;= printed by the binary</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Provider docs: aws_s3_bucket, google_storage_bucket</span><span class="note">bucket forces a new resource; name and location ForceNew in the Google schema</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">HCP Terraform policy enforcement</span><span class="note">Sentinel and OPA both supported; named as concepts only</span></div>
+      <div class="covered-row"><span class="status pill light">◐</span><span class="name">The plan simulator</span><span class="note">A teaching engine following Terraform's planning rules for three teaching resource types; matched rung by rung against an independent Python version; ties in the apply order broken by address</span></div>
+      <div class="covered-row"><span class="status pill light">◐</span><span class="name">Larkspur Freight, its zones and ids</span><span class="note">Constructed for teaching</span></div>
+    </div>
+    <p class="mono" style="margin-top:14px">Every fact on this page, and its verification tier, is recorded in the course's source map.</p>
+  </section>
+
+  <section class="cheat" id="cheatsheet">
+    <h3>Session 5 cheat sheet <span>· pin this</span></h3>
+    <div class="grid-2">
+      <div class="cheat-item"><b>Reading order</b><span>Summary for scale, then every replace and destroy, then the forces-replacement attribute, then the reason line, then updates.</span></div>
+      <div class="cheat-item"><b>Two numbers</b><span>"X to add, Y to change, Z to destroy" and "data-bearing resources destroyed". Approve on the second.</span></div>
+      <div class="cheat-item"><b>Replace symbols</b><span><code>-/+</code> destroy then create; <code>+/-</code> create then destroy. Both end with a new, empty object.</span></div>
+      <div class="cheat-item"><b>lifecycle</b><span><code>prevent_destroy</code> stops the plan; <code>create_before_destroy</code> flips the order; <code>ignore_changes</code> hides attributes.</span></div>
+      <div class="cheat-item"><b>Rename safely</b><span>Add <code>moved { from = ... to = ... }</code>. No moved block reads as destroy plus create.</span></div>
+      <div class="cheat-item"><b>Order</b><span>From the graph: creates with the arrows, destroys against them. Never from the file.</span></div>
+    </div>
+  </section>
+
+  <div class="callout next">
+    <span class="nx-pill">Next session</span>
+    <p>Reading a plan well only helps if a plan is always read. Session 6 builds the gate: per-environment directories, a plan on every pull request and an apply only on merge, saved plans that refuse to apply once they are stale, where HCP Terraform and OpenTofu fit, and what the licence change means for a data team.</p>
+  </div>
+
+  <footer class="pagefoot">
+    <span>Session 5 of 6 · learn-terraform-with-phoebe · by Phoebe Fu &nbsp;·&nbsp; 📚 <a href="https://phoebefu6.github.io/learn-with-phoebe/">Learn with Phoebe ↗</a></span>
+    <span><a href="04-modules-and-versions.html">← Prev: Modules and versions</a> &nbsp;·&nbsp; <a href="06-plan-on-pr-apply-on-merge.html">Next: Plan on the PR, apply on merge →</a></span>
+  </footer>
+
+</main>
+
+<script src="../assets/plan-live.js?v=4"></script>
+<script src="../assets/app.js?v=1"></script>
+</body>
+</html>

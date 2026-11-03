@@ -1,0 +1,23 @@
+# tags changed
+plan. Resource actions are indicated with the following symbols:
+  ~ update in-place
+
+Terraform will perform the following actions:
+
+  # terraform_data.raw_zone will be updated in-place
+  ~ resource "terraform_data" "raw_zone" {
+        id               = "6675ecfc-259a-be0a-cbdd-2b7d54838823"
+      ~ input            = {
+            name   = "larkspur-prod-raw"
+          ~ tags   = "team=data" -> "team=data,owner=platform"
+            # (1 unchanged attribute hidden)
+        }
+      ~ output           = {
+          - name   = "larkspur-prod-raw"
+          - region = "eu-central-1"
+          - tags   = "team=data"
+        } -> (known after apply)
+        # (1 unchanged attribute hidden)
+    }
+
+Plan: 0 to add, 1 to change, 0 to destroy.

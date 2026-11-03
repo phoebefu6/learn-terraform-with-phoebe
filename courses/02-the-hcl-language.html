@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- social:start -->
+<meta name="description" content="Session 2 of 6. The HCL language for data engineers: blocks, arguments and types, variables with validation, sensitive outputs, locals, count against for_each, for expressions and data sources, run for real on your laptop as Larkspur's lake zones.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Learn with Phoebe">
+<meta property="og:title" content="The HCL language - learn terraform with phoebe">
+<meta property="og:description" content="Session 2 of 6. Variables, validation, for_each and data sources, and why a for_each key survives a change that a count index does not. Really run.">
+<meta property="og:url" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/courses/02-the-hcl-language.html">
+<meta property="og:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The HCL language - learn terraform with phoebe">
+<meta name="twitter:description" content="Session 2 of 6. Blocks, variables, for_each over count, and data sources, built as Larkspur's lake zones.">
+<meta name="twitter:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<!-- social:end -->
+<title>Session 2 · The HCL language - learn terraform with phoebe</title>
+<link rel="stylesheet" href="../assets/style.css?v=2">
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">learn-terraform-with-phoebe</a> / Session 2 of 6</span>
+    <button class="btn" id="toggle-all" type="button">Expand all</button>
+    <button class="btn primary" id="zoom-toggle" type="button">Projector zoom: off</button>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="eyebrow">Learn Terraform with Phoebe · Session 2 of 6</div>
+    <h1>The <span class="accent">HCL</span> language</h1>
+    <p class="sub">Last session's config had one id and one file, both written out by hand. A real data platform has zones per environment, settings that differ between dev and prod, a password that must never be printed, and things other teams built that you need to read but not own. HCL, the language Terraform configs are written in, has a small set of tools for exactly that: variables and validation, locals, for_each, outputs and data sources. Tonight you meet each one, then use all of them to lay out Larkspur's lake zones, and run the one experiment that explains why experienced engineers reach for for_each before count.</p>
+    <div class="chip-row">
+      <span class="chip level">🟢 Foundations</span>
+      <span class="chip audience">Data engineers; leaders can skim Part 1</span>
+      <span class="chip audience">terraform or tofu CLI, no cloud account</span>
+      <span class="chip time">45 min</span>
+    </div>
+    <div class="agenda">
+      <span class="a1" style="flex:1">0-3 · Welcome</span>
+      <span class="a2" style="flex:4">3-18 · Blocks, variables, for_each</span>
+      <span class="a3" style="flex:5">18-40 · Build-along: the lake zones</span>
+      <span class="a4" style="flex:1">40-45 · Q&amp;A</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="section" id="intro">
+    <div class="section-kicker">
+      <span class="klabel">Part 0</span>
+      <h2>Where we pick up</h2>
+    </div>
+    <p class="lede">The running case is constructed. Larkspur Freight is an invented mid-size logistics company writing its first data platform down as code, and Priya, its data lead, owns the result. After session 1 she has a working Terraform folder and a habit of reading plans. Tonight she needs the lake itself: a raw zone for files as they land, a curated zone for cleaned tables, and a serving zone for what analysts query, each with its own retention, laid out for dev now and prod later. Stand-in files on your laptop play the part of real storage, so the language is real and the bill is zero.</p>
+
+    <div class="legend">
+      <span class="pill">🎫 Clear all three quiz questions to stamp your passport</span>
+      <span class="pill">Live = presented in the 45 minutes</span>
+      <span class="pill">Self-study = the full depth, after class</span>
+      <span class="pill">★ Build-along = run it yourself</span>
+    </div>
+
+    <div class="callout win">
+      <p><strong>★ What you walk out with tonight.</strong> The ability to read any Terraform block and name its parts, a variable that refuses bad input before anything runs, a lake laid out with for_each from one map, a data source reading back what you wrote, and a real plan that shows, in two lines, why a list index is a dangerous name for a data zone.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-1">
+    <div class="section-kicker">
+      <span class="klabel">Part 1 · covers blocks, arguments, types, variables, outputs and locals</span>
+      <h2>Blocks, arguments, and the values that flow between them</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">Every Terraform file is made of blocks, and every block follows the same grammar: a block type, zero or more labels, then braces holding arguments and sometimes more blocks. Learn that one shape and the whole language reads the same way, whether the block declares a provider, a resource, a variable or an output. Values then move between blocks by reference, and that movement is what makes one config serve several environments.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 430" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Top: two blocks from the build-along config with their parts named. resource local_file zone has the block type resource, the type label local_file and the name label zone, giving the address local_file.zone; its body holds arguments written as name equals expression, including the for_each meta-argument. variable env takes one label and is referenced as var.env; its validation block is a nested block with braces and no equals sign. Bottom: one value flowing through four blocks. var.env equals dev feeds local.prefix larkspur-dev, which feeds the filename argument of the resource, lake/larkspur-dev-raw, which the zone_paths output prints after apply.">
+        <defs>
+          <filter id="w2aSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="52" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w2aHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w2aAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w2aAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w2aH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w2aL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w2aS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w2aB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w2aA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w2aN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w2aH" x="30" y="26">ANATOMY OF A BLOCK, FROM TONIGHT'S CONFIG</text>
+
+        <g filter="url(#w2aSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="40" y="54" width="430" height="216" rx="10" transform="rotate(-0.4 255 162)" fill="#F4EEFB"/>
+          <path d="M552 78 L480 78" marker-end="url(#w2aAr)"/>
+          <path d="M478 100 C486 100 488 104 488 110 L488 134 C488 140 486 144 478 144"/>
+          <path d="M552 122 L494 122" marker-end="url(#w2aAr)"/>
+          <path d="M552 186 L480 186" marker-end="url(#w2aAr)"/>
+          <path d="M552 230 L480 230" marker-end="url(#w2aAr)"/>
+          <rect x="40" y="312" width="180" height="76" rx="8" transform="rotate(-1.2 130 350)" fill="#FFFFFF"/>
+          <rect x="250" y="312" width="180" height="76" rx="8" transform="rotate(0.9 340 350)" fill="#FFFFFF"/>
+          <rect x="460" y="312" width="180" height="76" rx="8" transform="rotate(-0.8 550 350)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="670" y="312" width="180" height="76" rx="8" transform="rotate(1.1 760 350)" fill="#FFFFFF"/>
+          <path d="M222 350 L244 350" marker-end="url(#w2aAr)"/>
+          <path d="M432 350 L454 350" marker-end="url(#w2aAt)"/>
+          <path d="M642 350 L664 350" marker-end="url(#w2aAr)"/>
+        </g>
+
+        <text class="w2aL" x="60" y="82">resource "local_file" "zone" {</text>
+        <text class="w2aL" x="76" y="110">for_each = var.zones</text>
+        <text class="w2aL" x="76" y="138">filename = "${path.module}/lake/${local.prefix}-..."</text>
+        <text class="w2aL" x="60" y="162">}</text>
+        <text class="w2aL" x="60" y="190">variable "env" {</text>
+        <text class="w2aL" x="76" y="212">type = string</text>
+        <text class="w2aL" x="76" y="234">validation { ... }</text>
+        <text class="w2aL" x="60" y="256">}</text>
+
+        <text class="w2aL" x="560" y="82">block type, type label, name label</text>
+        <text class="w2aS" x="560" y="98">its address: local_file.zone</text>
+        <text class="w2aL" x="560" y="126">arguments: name = expression</text>
+        <text class="w2aS" x="560" y="142">for_each is a meta-argument</text>
+        <text class="w2aL" x="560" y="190">a variable takes one label</text>
+        <text class="w2aS" x="560" y="205">referenced as var.env</text>
+        <text class="w2aL" x="560" y="234">nested block: braces, no equals sign</text>
+        <text class="w2aS" x="560" y="249">validation lives inside variable</text>
+
+        <text class="w2aH" x="30" y="300">ONE VALUE THROUGH FOUR BLOCKS</text>
+        <text class="w2aA" x="130" y="332" text-anchor="middle">VARIABLE</text>
+        <text class="w2aL" x="130" y="354" text-anchor="middle">var.env = "dev"</text>
+        <text class="w2aS" x="130" y="372" text-anchor="middle">from -var or the default</text>
+        <text class="w2aA" x="340" y="332" text-anchor="middle">LOCAL</text>
+        <text class="w2aL" x="340" y="354" text-anchor="middle">larkspur-${var.env}</text>
+        <text class="w2aS" x="340" y="372" text-anchor="middle">local.prefix, named once</text>
+        <text class="w2aA" x="550" y="332" text-anchor="middle">RESOURCE ARGUMENT</text>
+        <text class="w2aL" x="550" y="354" text-anchor="middle">filename</text>
+        <text class="w2aB" x="550" y="372" text-anchor="middle">lake/larkspur-dev-raw/</text>
+        <text class="w2aA" x="760" y="332" text-anchor="middle">OUTPUT</text>
+        <text class="w2aL" x="760" y="354" text-anchor="middle">zone_paths</text>
+        <text class="w2aS" x="760" y="372" text-anchor="middle">printed after apply</text>
+
+        <text class="w2aN" x="30" y="414">Change var.env and everything downstream follows. Build step 6 shows what that costs.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - one grammar for every block, and references are the pipes values travel through</figcaption>
+    </figure>
+
+    <details class="card" open>
+      <summary><span class="mode live">Live</span>Blocks and arguments: the grammar in one picture<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Seven block types carry almost everything you will write. <code>terraform</code> holds settings such as <code>required_providers</code>. <code>provider</code> configures a plugin. <code>resource</code> declares something Terraform creates and owns. <code>data</code> declares something Terraform only reads. <code>variable</code> is an input, <code>output</code> is a value the config hands back, and <code>locals</code> names an intermediate value so you write it once. Inside the braces, an argument is <code>name = expression</code>; a nested block, such as <code>validation</code> inside a variable, has its own braces and no equals sign.</p>
+        <p>Every value has a type. The primitive ones are <code>string</code>, <code>number</code> and <code>bool</code>. The collections are <code>list</code> (ordered, by position), <code>map</code> (by key) and <code>set</code> (unique, unordered), and <code>object</code> describes a structure with named attributes of their own types. Larkspur's zones are a <code>map(object({ retention_days = number }))</code>: one key per zone, each carrying its own retention. That one type declaration is what lets Terraform reject a zone with retention written as "thirty" before anything runs.</p>
+        <p>Values travel by reference: <code>var.env</code> for a variable, <code>local.prefix</code> for a local, <code>local_file.zone["raw"].filename</code> for a resource attribute, <code>data.local_file.raw_marker.content</code> for a data source. Formatting is not a matter of taste either: <code>terraform fmt</code> rewrites files into the canonical layout, and session 6 turns it into a check every change must pass.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>Validation and sensitive<span class="mini">4 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>A <code>validation</code> block inside a variable has two arguments: a <code>condition</code> that must be true, and an <code>error_message</code> shown when it is not. Larkspur allows exactly two environments, so the condition is <code>contains(["dev", "prod"], var.env)</code>. In the build-along, passing <code>-var env=staging</code> stops the plan with "env must be dev or prod.", and Terraform names the rule and the line that rejected it. A bad value never reaches a resource.</p>
+        <p><code>sensitive = true</code> is narrower than it sounds. On a variable or output it hides the value in plan and apply output: the build-along prints <code>warehouse_password = &lt;sensitive&gt;</code>. It does not keep the value out of the state file. HashiCorp's own documentation says "Terraform stores values with the <code>sensitive</code> argument in both state and plan files." When the build-along's state file was searched for the fake password with <code>grep -c</code>, the count was 1. Session 3 opens that file and finds it in plain text. Real secrets belong in a secrets manager such as Vault, which this session only names.</p>
+        <p>Variable validation is one of several custom conditions. Resources, data sources and outputs can also carry <code>precondition</code> and <code>postcondition</code> checks, added in Terraform 1.2.0; they are named here and not built.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>The environment nobody planned.</strong> A familiar story on platform teams: someone types <code>stagging</code> or <code>Prod</code> on the command line, and the config happily builds a third set of resources with a misspelled name, which then sits there costing money until someone notices it in a bill. A one-line validation on the environment variable turns that into an error before the plan exists, which is the cheapest place an error can ever appear.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-2">
+    <div class="section-kicker">
+      <span class="klabel">Part 2 · covers count against for_each</span>
+      <h2>Name instances by key, not by position</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">Both <code>count</code> and <code>for_each</code> turn one resource block into several instances. The difference is how each instance is named in state. count names them by position: <code>[0]</code>, <code>[1]</code>, <code>[2]</code>. for_each names them by key: <code>["raw"]</code>, <code>["curated"]</code>, <code>["serving"]</code>. Positions move when a list changes; keys do not. For anything that holds data, that difference decides whether a small edit removes one zone or quietly rewrites another.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Before and after removing curated from the list raw, curated, serving. Left, count: before, indexes 0 raw, 1 curated, 2 serving. After, index 0 stays raw, serving shifts into index 1 so index 1 is updated in place from curated to serving, and index 2 is destroyed. Right, for_each: before, keys raw, curated and serving. After, only the curated key is destroyed and serving is untouched. Both together, the real plan read 0 to add, 1 to change, 2 to destroy.">
+        <defs>
+          <filter id="w2bSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="64" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w2bHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w2bAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w2bAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w2bH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w2bL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w2bS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w2bB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w2bR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w2bA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w2bN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w2bH" x="30" y="24">REMOVE "curated" FROM ["raw", "curated", "serving"]: WHAT EACH ADDRESS DOES</text>
+
+        <g filter="url(#w2bSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="40" width="400" height="250" rx="12" transform="rotate(-0.3 230 165)" fill="#FFFFFF"/>
+          <rect x="450" y="40" width="400" height="250" rx="12" transform="rotate(0.3 650 165)" fill="#FFFFFF"/>
+          <rect x="45" y="92" width="118" height="50" rx="6" transform="rotate(-1.5 104 117)" fill="url(#w2bHc)"/>
+          <rect x="171" y="92" width="118" height="50" rx="6" transform="rotate(1 230 117)" fill="url(#w2bHc)"/>
+          <rect x="297" y="92" width="118" height="50" rx="6" transform="rotate(-1 356 117)" fill="url(#w2bHc)"/>
+          <rect x="45" y="196" width="118" height="50" rx="6" transform="rotate(1.2 104 221)" fill="url(#w2bHc)"/>
+          <rect x="171" y="196" width="118" height="50" rx="6" transform="rotate(-1.4 230 221)" fill="#FEF2F2" stroke="#991B1B"/>
+          <rect x="297" y="196" width="118" height="50" rx="6" transform="rotate(1 356 221)" fill="#FEF2F2" stroke="#FCA5A5" stroke-dasharray="6 5"/>
+          <path d="M350 146 L246 192" marker-end="url(#w2bAr)"/>
+          <rect x="465" y="92" width="118" height="50" rx="6" transform="rotate(1.3 524 117)" fill="url(#w2bHc)"/>
+          <rect x="591" y="92" width="118" height="50" rx="6" transform="rotate(-1 650 117)" fill="url(#w2bHc)"/>
+          <rect x="717" y="92" width="118" height="50" rx="6" transform="rotate(1.1 776 117)" fill="url(#w2bHc)"/>
+          <rect x="465" y="196" width="118" height="50" rx="6" transform="rotate(-1.2 524 221)" fill="url(#w2bHc)"/>
+          <rect x="591" y="196" width="118" height="50" rx="6" transform="rotate(1.4 650 221)" fill="#FEF2F2" stroke="#FCA5A5" stroke-dasharray="6 5"/>
+          <rect x="717" y="196" width="118" height="50" rx="6" transform="rotate(-1 776 221)" fill="#E3F3F1" stroke="#0F766E"/>
+        </g>
+
+        <text class="w2bL" x="45" y="62">count: by_index[...], named by position</text>
+        <text class="w2bA" x="45" y="84">BEFORE</text>
+        <text class="w2bL" x="104" y="114" text-anchor="middle">[0]</text>
+        <text class="w2bS" x="104" y="131" text-anchor="middle">raw</text>
+        <text class="w2bL" x="230" y="114" text-anchor="middle">[1]</text>
+        <text class="w2bS" x="230" y="131" text-anchor="middle">curated</text>
+        <text class="w2bL" x="356" y="114" text-anchor="middle">[2]</text>
+        <text class="w2bS" x="356" y="131" text-anchor="middle">serving</text>
+        <text class="w2bA" x="45" y="186">AFTER</text>
+        <text class="w2bS" x="306" y="178">serving moves to [1]</text>
+        <text class="w2bL" x="104" y="218" text-anchor="middle">[0]</text>
+        <text class="w2bS" x="104" y="235" text-anchor="middle">raw, unchanged</text>
+        <text class="w2bL" x="230" y="218" text-anchor="middle">[1]</text>
+        <text class="w2bR" x="230" y="235" text-anchor="middle">~ now serving</text>
+        <text class="w2bL" x="356" y="218" text-anchor="middle">[2]</text>
+        <text class="w2bR" x="356" y="235" text-anchor="middle">- destroyed</text>
+        <text class="w2bR" x="45" y="272">curated's slot rewritten in place, [2] destroyed</text>
+
+        <text class="w2bL" x="465" y="62">for_each: by_key[...], named by key</text>
+        <text class="w2bA" x="465" y="84">BEFORE</text>
+        <text class="w2bL" x="524" y="114" text-anchor="middle">["raw"]</text>
+        <text class="w2bL" x="650" y="114" text-anchor="middle">["curated"]</text>
+        <text class="w2bL" x="776" y="114" text-anchor="middle">["serving"]</text>
+        <text class="w2bA" x="465" y="186">AFTER</text>
+        <text class="w2bL" x="524" y="218" text-anchor="middle">["raw"]</text>
+        <text class="w2bS" x="524" y="235" text-anchor="middle">unchanged</text>
+        <text class="w2bL" x="650" y="218" text-anchor="middle">["curated"]</text>
+        <text class="w2bR" x="650" y="235" text-anchor="middle">- destroyed</text>
+        <text class="w2bL" x="776" y="218" text-anchor="middle">["serving"]</text>
+        <text class="w2bB" x="776" y="235" text-anchor="middle">untouched</text>
+        <text class="w2bB" x="465" y="272">only the removed key goes; every other key stays put</text>
+
+        <text class="w2bN" x="30" y="314">Both resources in one real run: "Plan: 0 to add, 1 to change, 2 to destroy." Terraform 1.17.1.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - a position is not a name; when the list shrinks, every later index means something else</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>Why for_each keys survive a reordered list<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>The build-along's last step runs this for real. One variable holds <code>["raw", "curated", "serving"]</code>. Resource <code>by_index</code> uses <code>count</code> over it; resource <code>by_key</code> uses <code>for_each</code> over the same list turned into a set. After applying both, remove "curated" and plan.</p>
+        <p>The count resource still has a <code>[0]</code> and a <code>[1]</code>, it just has no <code>[2]</code> any more. So Terraform reports <code>by_index[1]</code> "will be updated in-place" with <code>input = "curated" -&gt; "serving"</code>, and <code>by_index[2]</code> "will be destroyed", with the reason printed underneath: "because index [2] is out of range for count". The for_each resource reports one line: <code>by_key["curated"]</code> "will be destroyed" because the key "is not in for_each map". The combined plan reads "Plan: 0 to add, 1 to change, 2 to destroy."</p>
+        <p>With stand-in resources that is harmless. With a storage zone it means the object that held curated data is now told to be the serving zone, and the object that really was serving is deleted. You asked for one removal and got a rewrite plus a deletion of the wrong thing.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>When count is still right<span class="mini">2 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>HashiCorp's count documentation draws the line clearly: "Use the count argument when you want to create nearly identical instances", and "Use for_each when some instance arguments must have distinct values that can't be directly derived from an integer index." Three interchangeable worker nodes are nearly identical; three data zones with different names and retention are not.</p>
+        <p>count also has one job it does better than anything else: switching a single resource on or off. <code>count = var.enable_audit_zone ? 1 : 0</code> creates the resource when the flag is true and none when it is false. There is only ever one instance, at <code>[0]</code>, so nothing can shift.</p>
+        <p>One practical note for for_each: it takes a map or a set of strings, not a list. That is why the experiment wraps the list in <code>toset(...)</code>, and why Larkspur's zones are declared as a map from the start.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>A data zone overwritten by an index shift.</strong> A pattern that shows up whenever storage is created from a list with count: someone retires the middle entry, the plan says "1 to change, 1 to destroy", it looks small, and it gets approved. What it actually did was repoint one zone's settings at another's name and delete the last one in the list. Reviewers who know the difference read the address, not the count of changes: a <code>[1]</code> being updated where you expected a removal is the tell. Zone design itself (raw, curated, serving) is covered in <a href="https://phoebefu6.github.io/learn-data-warehouse-with-phoebe/">Learn Data Warehouse with Phoebe</a>.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-3">
+    <div class="section-kicker">
+      <span class="klabel">Part 3 · covers expressions, for expressions and data sources</span>
+      <h2>Expressions shape values; data sources read them</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">An expression is anything on the right of an equals sign: a literal, a reference, a string with <code>${...}</code> interpolation, a function call, a conditional, or a <code>for</code> expression that builds a new collection from an old one. A data source is the other half of reading: instead of computing a value inside the config, it asks a provider for something that already exists, and Terraform never creates, changes or destroys it.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 282" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Four boxes left to right. The resource local_file.zone raw creates and writes the file. The real file lake/larkspur-dev-raw/ZONE.txt holds zone=raw env=dev retention_days=30. The data source data.local_file.raw_marker, highlighted, reads that file, shown by the read symbol less-than-equals. The output raw_marker_text prints the trimmed content. A curve from the data source back to the resource shows the reference to its filename, which makes the read wait until the write is done.">
+        <defs>
+          <filter id="w2cSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="77" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w2cHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w2cAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w2cAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w2cH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w2cL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w2cS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w2cB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w2cV { font: 800 18px Inter, sans-serif; fill: #4A2478; }
+          .w2cA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w2cN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w2cH" x="30" y="26">WRITE, THEN READ BACK: WHERE THE DATA SOURCE SITS</text>
+
+        <g filter="url(#w2cSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="50" width="190" height="104" rx="10" transform="rotate(-0.8 125 102)" fill="#FFFFFF"/>
+          <rect x="240" y="50" width="190" height="104" rx="10" transform="rotate(0.7 335 102)" fill="url(#w2cHc)"/>
+          <rect x="252" y="80" width="166" height="62" rx="6" transform="rotate(-0.5 335 111)" fill="#FFFFFF"/>
+          <rect x="450" y="50" width="190" height="104" rx="10" transform="rotate(-0.6 545 102)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="660" y="50" width="190" height="104" rx="10" transform="rotate(0.8 755 102)" fill="#F4EEFB"/>
+          <path d="M222 102 L236 102" marker-end="url(#w2cAr)"/>
+          <path d="M432 102 L446 102" marker-end="url(#w2cAr)"/>
+          <path d="M642 102 L656 102" marker-end="url(#w2cAr)"/>
+          <path d="M545 160 C540 204 140 204 128 162" stroke="#0F766E" stroke-dasharray="5 4" marker-end="url(#w2cAt)"/>
+        </g>
+
+        <text class="w2cA" x="125" y="72" text-anchor="middle">RESOURCE, MANAGES</text>
+        <text class="w2cL" x="125" y="96" text-anchor="middle">local_file.zone["raw"]</text>
+        <text class="w2cS" x="125" y="116" text-anchor="middle">+ create: writes the file</text>
+        <text class="w2cS" x="125" y="134" text-anchor="middle">owned by this config</text>
+        <text class="w2cA" x="335" y="72" text-anchor="middle">THE REAL FILE</text>
+        <text class="w2cL" x="335" y="100" text-anchor="middle">ZONE.txt</text>
+        <text class="w2cS" x="335" y="117" text-anchor="middle">lake/larkspur-dev-raw/</text>
+        <text class="w2cS" x="335" y="133" text-anchor="middle">zone=raw env=dev ...</text>
+        <text class="w2cA" x="545" y="72" text-anchor="middle">DATA SOURCE, READS</text>
+        <text class="w2cV" x="545" y="98" text-anchor="middle">&lt;=</text>
+        <text class="w2cL" x="545" y="118" text-anchor="middle">data.local_file</text>
+        <text class="w2cL" x="545" y="136" text-anchor="middle">.raw_marker</text>
+        <text class="w2cA" x="755" y="72" text-anchor="middle">OUTPUT</text>
+        <text class="w2cL" x="755" y="96" text-anchor="middle">raw_marker_text</text>
+        <text class="w2cS" x="755" y="116" text-anchor="middle">"zone=raw env=dev</text>
+        <text class="w2cS" x="755" y="132" text-anchor="middle">retention_days=30"</text>
+
+        <text class="w2cB" x="336" y="224" text-anchor="middle">filename = local_file.zone["raw"].filename: a reference, so the read waits for the write</text>
+        <text class="w2cS" x="336" y="242" text-anchor="middle">the plan says "will be read during apply (depends on a resource or a module with changes pending)"</text>
+
+        <text class="w2cN" x="30" y="268">A data source never creates, changes or destroys. Its symbol in a plan is &lt;=, read.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - resources write and own; data sources only read, and a reference decides when they read</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>Expressions: interpolation, references, for<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Interpolation puts expressions inside a string: <code>"${path.module}/lake/${local.prefix}-${each.key}/ZONE.txt"</code> builds each zone's path from a built-in value, a local and the current for_each key. Inside a for_each block, <code>each.key</code> is the map key ("raw") and <code>each.value</code> is its object, so <code>each.value.retention_days</code> reads that zone's retention.</p>
+        <p>A <code>for</code> expression builds a new collection by walking an old one. Larkspur's output <code>zone_paths</code> is <code>{ for k, f in local_file.zone : k =&gt; f.filename }</code>: for each key and instance of the zone resource, keep the key and the filename. The result is a small map anyone can read without knowing the resource's internals. Functions do the rest: <code>contains</code> checks the environment in the validation, <code>trimspace</code> strips the trailing newline from the raw marker before it is printed, and <code>toset</code> turns a list into a set for for_each.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>Data sources read, never write<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p><code>data "local_file" "raw_marker"</code> asks the local provider to read a file and expose its content. It is declared with <code>data</code>, addressed as <code>data.local_file.raw_marker</code>, and in a plan it carries its own symbol: <code>&lt;= read (data resources)</code>. Terraform will never create, change or destroy the thing it reads. That is the whole point: the object belongs to someone else, or to another part of the config, and you only need its attributes.</p>
+        <p>Normally a data source is read during plan. Here its <code>filename</code> refers to a resource that does not exist yet, so Terraform cannot read it early, and the plan says so in two lines: "will be read during apply" and "(depends on a resource or a module with changes pending)". In the apply output you then see the file created first and the read afterwards.</p>
+        <p>In real platforms a data source is how one team's config uses another team's objects, such as an existing network, a shared key or a catalog, without taking ownership of them. Who may read what is an access-design question; <a href="https://phoebefu6.github.io/learn-data-access-control-with-phoebe/">Learn Data Access Control with Phoebe</a> covers it.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>The hard-coded id that outlived its object.</strong> A familiar failure: a config pastes in the id of a network or bucket another team created, the other team rebuilds it, and the pasted id now points at nothing. A data source that looks the object up by name on every plan removes the copy, and when the lookup fails it fails at plan time, in front of a reviewer, instead of half-way through an apply.</p>
+    </div>
+  </section>
+
+  <section class="section" id="demo-1">
+    <div class="section-kicker">
+      <span class="klabel">Build-along</span>
+      <h2>Larkspur's lake zones, per environment</h2>
+      <span class="tag demo">★ 22 min · everyone builds</span>
+    </div>
+    <p class="lede">Priya lays out the lake: one folder per zone, named for the environment, each holding a marker file with its retention. A validated environment variable, a map of zones, a local prefix, a for_each resource, a data source and three outputs: every idea from tonight in one file. Start in a fresh folder; everything runs locally with hashicorp/local and the built-in terraform_data, and works the same with tofu. Every output below was really run with Terraform 1.17.1 and hashicorp/local 2.9.1; your ids, hashes and times will differ.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 348" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Three state addresses in the middle, local_file.zone raw, curated and serving. With env=dev each one owns a folder under lake: larkspur-dev-raw with retention 30, larkspur-dev-curated with 365, larkspur-dev-serving with 90. Planning with env=prod keeps the same three addresses but changes their filenames, so each is replaced: the dev folder is destroyed and a larkspur-prod folder is created. The real plan read 3 to add, 0 to change, 3 to destroy.">
+        <defs>
+          <filter id="w2dSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="89" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w2dHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w2dAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w2dAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w2dH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w2dL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w2dS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w2dB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w2dR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w2dA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w2dN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w2dH" x="30" y="26">ONE ADDRESS PER KEY; THE ENV VARIABLE DECIDES WHICH FOLDER IT OWNS</text>
+
+        <g filter="url(#w2dSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="40" y="76" width="220" height="56" rx="8" transform="rotate(-1 150 104)" fill="#FEF2F2" stroke="#FCA5A5"/>
+          <rect x="40" y="150" width="220" height="56" rx="8" transform="rotate(0.8 150 178)" fill="#FEF2F2" stroke="#FCA5A5"/>
+          <rect x="40" y="224" width="220" height="56" rx="8" transform="rotate(-0.7 150 252)" fill="#FEF2F2" stroke="#FCA5A5"/>
+          <rect x="335" y="76" width="210" height="56" rx="8" transform="rotate(0.6 440 104)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="335" y="150" width="210" height="56" rx="8" transform="rotate(-0.5 440 178)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="335" y="224" width="210" height="56" rx="8" transform="rotate(0.7 440 252)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="620" y="76" width="220" height="56" rx="8" transform="rotate(0.9 730 104)" fill="#F4EEFB"/>
+          <rect x="620" y="150" width="220" height="56" rx="8" transform="rotate(-1 730 178)" fill="#F4EEFB"/>
+          <rect x="620" y="224" width="220" height="56" rx="8" transform="rotate(0.8 730 252)" fill="#F4EEFB"/>
+          <path d="M331 104 L266 104" stroke="#991B1B" stroke-dasharray="5 4" marker-end="url(#w2dAr)"/>
+          <path d="M331 178 L266 178" stroke="#991B1B" stroke-dasharray="5 4" marker-end="url(#w2dAr)"/>
+          <path d="M331 252 L266 252" stroke="#991B1B" stroke-dasharray="5 4" marker-end="url(#w2dAr)"/>
+          <path d="M549 104 L614 104" marker-end="url(#w2dAr)"/>
+          <path d="M549 178 L614 178" marker-end="url(#w2dAr)"/>
+          <path d="M549 252 L614 252" marker-end="url(#w2dAr)"/>
+        </g>
+
+        <text class="w2dA" x="150" y="62" text-anchor="middle">lake/ AFTER APPLY, env=dev</text>
+        <text class="w2dA" x="440" y="62" text-anchor="middle">STATE ADDRESSES</text>
+        <text class="w2dA" x="730" y="62" text-anchor="middle">PLAN WITH -var env=prod</text>
+
+        <text class="w2dL" x="150" y="100" text-anchor="middle">larkspur-dev-raw/</text>
+        <text class="w2dS" x="150" y="118" text-anchor="middle">ZONE.txt · retention_days=30</text>
+        <text class="w2dL" x="150" y="174" text-anchor="middle">larkspur-dev-curated/</text>
+        <text class="w2dS" x="150" y="192" text-anchor="middle">ZONE.txt · retention_days=365</text>
+        <text class="w2dL" x="150" y="248" text-anchor="middle">larkspur-dev-serving/</text>
+        <text class="w2dS" x="150" y="266" text-anchor="middle">ZONE.txt · retention_days=90</text>
+
+        <text class="w2dL" x="440" y="100" text-anchor="middle">local_file.zone["raw"]</text>
+        <text class="w2dB" x="440" y="118" text-anchor="middle">-/+ must be replaced</text>
+        <text class="w2dL" x="440" y="174" text-anchor="middle">local_file.zone["curated"]</text>
+        <text class="w2dB" x="440" y="192" text-anchor="middle">-/+ must be replaced</text>
+        <text class="w2dL" x="440" y="248" text-anchor="middle">local_file.zone["serving"]</text>
+        <text class="w2dB" x="440" y="266" text-anchor="middle">-/+ must be replaced</text>
+
+        <text class="w2dL" x="730" y="100" text-anchor="middle">larkspur-prod-raw/</text>
+        <text class="w2dS" x="730" y="118" text-anchor="middle">ZONE.txt · retention_days=30</text>
+        <text class="w2dL" x="730" y="174" text-anchor="middle">larkspur-prod-curated/</text>
+        <text class="w2dS" x="730" y="192" text-anchor="middle">ZONE.txt · retention_days=365</text>
+        <text class="w2dL" x="730" y="248" text-anchor="middle">larkspur-prod-serving/</text>
+        <text class="w2dS" x="730" y="266" text-anchor="middle">ZONE.txt · retention_days=90</text>
+
+        <text class="w2dR" x="150" y="304" text-anchor="middle">- destroyed: the old filename</text>
+        <text class="w2dB" x="440" y="304" text-anchor="middle">same key, new filename</text>
+        <text class="w2dS" x="730" y="304" text-anchor="middle">+ created: the new filename</text>
+
+        <text class="w2dN" x="30" y="332">Real plan: "Plan: 3 to add, 0 to change, 3 to destroy." One state, so prod would replace dev, not sit beside it.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - a variable changes what an address points at; it does not give you a second copy of the platform</figcaption>
+    </figure>
+
+    <div class="steps">
+      <div class="step">
+        <p><strong>Write the config.</strong> Save this as <code>main.tf</code> in an empty folder, then run <code>terraform init</code> as in session 1. The password default is deliberately fake and obviously so; never put a real secret in a default.</p>
+        <div class="prompt-box good"><span class="label">★ Step 1 · main.tf</span>terraform {
+  required_providers {
+    local = { source = "hashicorp/local", version = "~&gt; 2.5" }
+  }
+}
+
+variable "env" {
+  type        = string
+  description = "Which environment to lay out"
+  default     = "dev"
+  validation {
+    condition     = contains(["dev", "prod"], var.env)
+    error_message = "env must be dev or prod."
+  }
+}
+
+variable "zones" {
+  type = map(object({
+    retention_days = number
+  }))
+  default = {
+    raw     = { retention_days = 30 }
+    curated = { retention_days = 365 }
+    serving = { retention_days = 90 }
+  }
+}
+
+variable "warehouse_password" {
+  type      = string
+  sensitive = true
+  default   = "not-a-real-secret"
+}
+
+locals {
+  prefix = "larkspur-${var.env}"
+}
+
+resource "local_file" "zone" {
+  for_each = var.zones
+  filename = "${path.module}/lake/${local.prefix}-${each.key}/ZONE.txt"
+  content  = "zone=${each.key} env=${var.env} retention_days=${each.value.retention_days}\n"
+}
+
+data "local_file" "raw_marker" {
+  filename = local_file.zone["raw"].filename
+}
+
+output "zone_paths" {
+  value = { for k, f in local_file.zone : k =&gt; f.filename }
+}
+
+output "raw_marker_text" {
+  value = trimspace(data.local_file.raw_marker.content)
+}
+
+output "warehouse_password" {
+  value     = var.warehouse_password
+  sensitive = true
+}</div>
+      </div>
+      <div class="step">
+        <p><strong>Validate.</strong> <code>terraform validate</code> checks syntax, references and types without touching anything or asking the provider about real objects. It is the cheapest check there is, which is why session 6 runs it on every pull request.</p>
+        <div class="prompt-box good"><span class="label">★ Step 2 · terraform validate</span>$ terraform validate
+Success! The configuration is valid.</div>
+      </div>
+      <div class="step">
+        <p><strong>Try a bad environment.</strong> Ask for <code>staging</code>, which the validation does not allow. The plan stops with your own error message, the offending value and the exact rule that caught it. Nothing was created.</p>
+        <div class="prompt-box good"><span class="label">★ Step 3 · plan with env=staging</span>$ terraform plan -var env=staging
+
+Changes to Outputs:
+  + warehouse_password = (sensitive value)
+
+You can apply this plan to save these new output values to the Terraform
+state, without changing any real infrastructure.
+
+Error: Invalid value for variable
+
+  on main.tf line 7:
+   7: variable "env" {
+    ├────────────────
+    │ var.env is "staging"
+
+env must be dev or prod.
+
+This was checked by the validation rule at main.tf:11,3-13.</div>
+      </div>
+      <div class="step">
+        <p><strong>Apply with the default, dev.</strong> Read the legend first: a new symbol, <code>&lt;=</code>, means read. The data source waits for the raw file because it refers to it, so it is read during apply, after the three zones are created. In the outputs, the password prints as <code>&lt;sensitive&gt;</code>.</p>
+        <div class="prompt-box good"><span class="label">★ Step 4 · terraform apply (trimmed)</span>$ terraform apply -auto-approve
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+ &lt;= read (data resources)
+
+Terraform will perform the following actions:
+
+  # data.local_file.raw_marker will be read during apply
+  # (depends on a resource or a module with changes pending)
+ &lt;= data "local_file" "raw_marker" {
+      + content              = (known after apply)
+...
+      + filename             = "./lake/larkspur-dev-raw/ZONE.txt"
+      + id                   = (known after apply)
+    }
+
+  # local_file.zone["curated"] will be created
+  + resource "local_file" "zone" {
+      + content              = &lt;&lt;-EOT
+            zone=curated env=dev retention_days=365
+        EOT
+...
+      + filename             = "./lake/larkspur-dev-curated/ZONE.txt"
+      + id                   = (known after apply)
+    }
+...
+Plan: 3 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + raw_marker_text    = (known after apply)
+  + warehouse_password = (sensitive value)
+  + zone_paths         = {
+      + curated = "./lake/larkspur-dev-curated/ZONE.txt"
+      + raw     = "./lake/larkspur-dev-raw/ZONE.txt"
+      + serving = "./lake/larkspur-dev-serving/ZONE.txt"
+    }
+local_file.zone["raw"]: Creating...
+local_file.zone["curated"]: Creating...
+local_file.zone["serving"]: Creating...
+...
+data.local_file.raw_marker: Reading...
+data.local_file.raw_marker: Read complete after 0s [id=5c759187767bc174c5c0ac31b150de23b3fb99d1]
+
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+raw_marker_text = "zone=raw env=dev retention_days=30"
+warehouse_password = &lt;sensitive&gt;
+zone_paths = {
+  "curated" = "./lake/larkspur-dev-curated/ZONE.txt"
+  "raw" = "./lake/larkspur-dev-raw/ZONE.txt"
+  "serving" = "./lake/larkspur-dev-serving/ZONE.txt"
+}</div>
+      </div>
+      <div class="step">
+        <p><strong>Read the outputs again.</strong> <code>terraform output</code> prints the outputs from state without planning. Look in the <code>lake</code> folder too: three folders, <code>larkspur-dev-raw</code>, <code>larkspur-dev-curated</code> and <code>larkspur-dev-serving</code>, each with a <code>ZONE.txt</code>. The password is still hidden here, and still in <code>terraform.tfstate</code>; session 3 goes looking for it.</p>
+        <div class="prompt-box good"><span class="label">★ Step 5 · terraform output</span>$ terraform output
+raw_marker_text = "zone=raw env=dev retention_days=30"
+warehouse_password = &lt;sensitive&gt;
+zone_paths = {
+  "curated" = "./lake/larkspur-dev-curated/ZONE.txt"
+  "raw" = "./lake/larkspur-dev-raw/ZONE.txt"
+  "serving" = "./lake/larkspur-dev-serving/ZONE.txt"
+}</div>
+      </div>
+      <div class="step">
+        <p><strong>Plan for prod, and do not apply it.</strong> The keys are the same, so the addresses are the same, but every filename and content changes. A local file cannot be renamed in place, so the plan marks each zone <code>-/+</code>, "must be replaced", with <code># forces replacement</code> beside the two arguments that cause it. Applying this would delete dev to build prod. One config with an environment variable and one state is not how you keep dev and prod apart: session 4 gives each environment its own root config calling a shared module, and session 6 shows why CLI workspaces alone do not separate them either.</p>
+        <div class="prompt-box good"><span class="label">★ Step 6 · plan with env=prod (trimmed)</span>$ terraform plan -var env=prod
+local_file.zone["curated"]: Refreshing state... [id=3edcd67f52e40eaf609713752ee4632c230124eb]
+local_file.zone["serving"]: Refreshing state... [id=adf707491db8d1257491c8bad80c41f218151274]
+local_file.zone["raw"]: Refreshing state... [id=5c759187767bc174c5c0ac31b150de23b3fb99d1]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+-/+ destroy and then create replacement
+ &lt;= read (data resources)
+
+Terraform will perform the following actions:
+...
+  # local_file.zone["raw"] must be replaced
+-/+ resource "local_file" "zone" {
+      ~ content              = &lt;&lt;-EOT # forces replacement
+          - zone=raw env=dev retention_days=30
+          + zone=raw env=prod retention_days=30
+        EOT
+...
+      ~ filename             = "./lake/larkspur-dev-raw/ZONE.txt" -&gt; "./lake/larkspur-prod-raw/ZONE.txt" # forces replacement
+      ~ id                   = "5c759187767bc174c5c0ac31b150de23b3fb99d1" -&gt; (known after apply)
+        # (2 unchanged attributes hidden)
+    }
+...
+Plan: 3 to add, 0 to change, 3 to destroy.</div>
+      </div>
+      <div class="step">
+        <p><strong>The count against for_each experiment.</strong> In a second empty folder, save this config, run <code>terraform init</code> and apply it with the default three-item list. Then plan with "curated" removed. No provider download is needed beyond init: <code>terraform_data</code> is built in. Read the addresses, not just the summary line.</p>
+        <div class="prompt-box good"><span class="label">★ Step 7a · main.tf for the experiment</span>variable "zone_list" {
+  type    = list(string)
+  default = ["raw", "curated", "serving"]
+}
+resource "terraform_data" "by_index" {
+  count = length(var.zone_list)
+  input = var.zone_list[count.index]
+}
+resource "terraform_data" "by_key" {
+  for_each = toset(var.zone_list)
+  input    = each.key
+}</div>
+        <div class="prompt-box good"><span class="label">★ Step 7b · plan with curated removed (trimmed)</span>$ terraform plan -var zone_list=["raw","serving"]
+...
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  ~ update in-place
+  - destroy
+
+Terraform will perform the following actions:
+
+  # terraform_data.by_index[1] will be updated in-place
+  ~ resource "terraform_data" "by_index" {
+        id     = "9920dd9e-1c1b-c998-ecf2-97bef8e18a27"
+      ~ input  = "curated" -&gt; "serving"
+      ~ output = "curated" -&gt; (known after apply)
+    }
+
+  # terraform_data.by_index[2] will be destroyed
+  # (because index [2] is out of range for count)
+  - resource "terraform_data" "by_index" {
+      - id     = "20032c85-d892-435f-9652-90b2c73c194d" -&gt; null
+      - input  = "serving" -&gt; null
+      - output = "serving" -&gt; null
+    }
+
+  # terraform_data.by_key["curated"] will be destroyed
+  # (because key ["curated"] is not in for_each map)
+  - resource "terraform_data" "by_key" {
+      - id     = "eab32d47-e737-056e-e738-a11f1c677d0c" -&gt; null
+      - input  = "curated" -&gt; null
+      - output = "curated" -&gt; null
+    }
+
+Plan: 0 to add, 1 to change, 2 to destroy.</div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <p><strong>Keep the lake folder applied for dev.</strong> Session 3 opens its state file, finds the password you marked sensitive, renames a zone without destroying it, and breaks the state on purpose to repair it. If you applied prod by accident, apply again with the default and dev comes back from the file.</p>
+    </div>
+  </section>
+
+  <section class="section" id="exercise">
+    <div class="section-kicker">
+      <span class="klabel">Homework</span>
+      <h2>Before session 3</h2>
+      <span class="tag exercise">30 min</span>
+    </div>
+    <ol>
+      <li><strong>Add a fourth zone.</strong> Add <code>archive = { retention_days = 365 }</code> to the zones map and plan. Confirm the plan adds exactly one resource, <code>local_file.zone["archive"]</code>, and touches no other zone. Then write one sentence on what the same change would have done with count if you had added the zone in the middle of a list.</li>
+      <li><strong>Break the type.</strong> Set one zone's retention to the string <code>"thirty"</code> and run <code>terraform validate</code>. Note which block the error names and whether anything ran.</li>
+      <li><strong>Write a for expression.</strong> Add an output that maps each zone to its retention, using <code>{ for k, z in var.zones : k =&gt; z.retention_days }</code>. Apply and read it with <code>terraform output</code>.</li>
+      <li><strong>Find a list at work.</strong> Look for one resource in your team's Terraform that uses count over a list of named things. List what would move if the second item were removed, and whether that object holds data.</li>
+    </ol>
+  </section>
+
+  <section class="section" id="quiz">
+    <div class="section-kicker">
+      <span class="klabel">Check yourself</span>
+      <h2>Three questions</h2>
+    </div>
+    <p>Clear all three and session 2 gets stamped in your passport.</p>
+
+    <div class="quiz-q" data-answer="1">
+      <p class="qtext">1 · Three zones are created from the list <code>["raw", "curated", "serving"]</code> with count. You remove "curated" and plan. What does count do that for_each would not?</p>
+      <button class="qopt" type="button">A · Nothing different; both destroy only the curated instance</button>
+      <button class="qopt" type="button">B · It updates index [1] in place from curated to serving and destroys index [2]</button>
+      <button class="qopt" type="button">C · It destroys and recreates all three instances</button>
+      <button class="qopt" type="button">D · It refuses to plan until the list is sorted again</button>
+      <p class="qwhy">count names instances by position, so after the removal [1] means "serving" and [2] no longer exists. The real run printed by_index[1] updated in place and by_index[2] destroyed "because index [2] is out of range for count", while for_each destroyed only by_key["curated"]. A is what people expect, and why the shift goes unnoticed in review.</p>
+    </div>
+
+    <div class="quiz-q" data-answer="3">
+      <p class="qtext">2 · An output is marked <code>sensitive = true</code>. Which statement is accurate?</p>
+      <button class="qopt" type="button">A · The value is encrypted in the state file</button>
+      <button class="qopt" type="button">B · The value is never written to state or plan files</button>
+      <button class="qopt" type="button">C · Terraform refuses to apply until the value is moved to a secrets manager</button>
+      <button class="qopt" type="button">D · CLI output shows <code>&lt;sensitive&gt;</code>, but the value is still stored in state</button>
+      <p class="qwhy">sensitive hides the value in plan, apply and output listings only. HashiCorp's documentation says sensitive values are stored in both state and plan files, and the build-along's state file contained the fake password. Whether state is encrypted at rest depends on where it is stored, which is session 3.</p>
+    </div>
+
+    <div class="quiz-q" data-answer="0">
+      <p class="qtext">3 · A plan line starts with <code>&lt;=</code>. What will Terraform do to that object?</p>
+      <button class="qopt" type="button">A · Read it as a data source; it will not create, change or destroy it</button>
+      <button class="qopt" type="button">B · Replace it, destroying the old one first</button>
+      <button class="qopt" type="button">C · Update it in place with a smaller value</button>
+      <button class="qopt" type="button">D · Import it into state so it becomes managed</button>
+      <p class="qwhy">The plan legend reads "&lt;= read (data resources)". A data source only reads; here it was read during apply because its filename depends on a resource with changes pending. Replacement is <code>-/+</code>, update in place is <code>~</code>, and importing is a separate step covered in session 3.</p>
+    </div>
+
+    <p class="quiz-score"></p>
+  </section>
+
+  <section class="section" id="official">
+    <div class="section-kicker">
+      <span class="klabel">Sources covered</span>
+      <h2>What this session teaches, and where it came from</h2>
+    </div>
+    <div class="covered">
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform Associate (004) exam content list</span><span class="note">Objectives 3c (validate), 3g (fmt, mentioned; made a gate in session 6), 4a (resource and data blocks), 4b (references), 4c (variables and outputs), 4d (complex types), 4e (expressions and functions), read at developer.hashicorp.com</span></div>
+      <div class="covered-row"><span class="status pill light">◐</span><span class="name">Associate 004 objectives 4g and 4h, in part</span><span class="note">4g: variable validation built; precondition and postcondition named only. 4h: sensitive and its limits built; Vault named only</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">HashiCorp docs: count and for_each</span><span class="note">"nearly identical instances" for count; for_each when values cannot be derived from an integer index, read at source</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">HashiCorp docs: sensitive data in state</span><span class="note">Sensitive values are stored in both state and plan files, read at source; precondition and postcondition added in 1.2.0, from the changelog</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform 1.17.1 with hashicorp/local 2.9.1 and terraform_data</span><span class="note">Every command output on this page, really run; ids, hashes and times will differ on your machine</span></div>
+      <div class="covered-row"><span class="status pill light">◐</span><span class="name">Larkspur Freight, Priya and the lake zones</span><span class="note">Constructed for teaching; zone names and retention days are invented, not measurements</span></div>
+    </div>
+    <p class="mono" style="margin-top:14px">Every fact on this page, and its verification tier, is recorded in the course's source map.</p>
+  </section>
+
+  <section class="cheat" id="cheatsheet">
+    <h3>Session 2 cheat sheet <span>· pin this</span></h3>
+    <div class="grid-2">
+      <div class="cheat-item"><b>Block grammar</b><span><code>type "label" "label" { name = expr }</code>. Nested blocks have braces and no equals sign.</span></div>
+      <div class="cheat-item"><b>Types</b><span><code>string</code>, <code>number</code>, <code>bool</code>; <code>list</code> by position, <code>map</code> by key, <code>set</code> unique, <code>object</code> for structure.</span></div>
+      <div class="cheat-item"><b>Variable validation</b><span><code>condition</code> plus <code>error_message</code>. Bad input fails before the plan exists.</span></div>
+      <div class="cheat-item"><b>Sensitive is not secret</b><span>Hides the value in CLI output as <code>&lt;sensitive&gt;</code>; it is still stored in state and plan files.</span></div>
+      <div class="cheat-item"><b>for_each over count</b><span>Keys survive a removal; indexes shift. Keep count for identical copies or <code>cond ? 1 : 0</code>.</span></div>
+      <div class="cheat-item"><b>Data sources read</b><span><code>data "type" "name"</code>, symbol <code>&lt;=</code>. Never creates, changes or destroys.</span></div>
+    </div>
+  </section>
+
+  <div class="callout next">
+    <span class="nx-pill">Next session</span>
+    <p>The password printed as <code>&lt;sensitive&gt;</code> every time. Session 3 opens the state file and finds it in plain text, then asks where state should live, how to lock it, how to rename a zone without destroying it, and how to repair the record when someone edits the platform behind Terraform's back.</p>
+  </div>
+
+  <footer class="pagefoot">
+    <span>Session 2 of 6 · learn-terraform-with-phoebe · by Phoebe Fu &nbsp;·&nbsp; 📚 <a href="https://phoebefu6.github.io/learn-with-phoebe/">Learn with Phoebe ↗</a></span>
+    <span><a href="01-why-infrastructure-as-code.html">← Prev: Why infrastructure as code</a> &nbsp;·&nbsp; <a href="03-state-is-the-source-of-truth.html">Next: State is the source of truth →</a></span>
+  </footer>
+
+</main>
+
+<script src="../assets/app.js?v=1"></script>
+</body>
+</html>

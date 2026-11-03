@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- social:start -->
+<meta name="description" content="Session 1 of 6. Why a data platform belongs in code: click-ops against declarative configuration, desired state against actual state, providers and resources, and the init, plan, apply, destroy loop, run for real on your laptop with no cloud account.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Learn with Phoebe">
+<meta property="og:title" content="Why infrastructure as code - learn terraform with phoebe">
+<meta property="og:description" content="Session 1 of 6. Desired state, actual state, and the loop that keeps them equal. A first Terraform config, really run.">
+<meta property="og:url" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/courses/01-why-infrastructure-as-code.html">
+<meta property="og:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Why infrastructure as code - learn terraform with phoebe">
+<meta name="twitter:description" content="Session 1 of 6. Click-ops against code, and the init, plan, apply, destroy loop.">
+<meta name="twitter:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<!-- social:end -->
+<title>Session 1 · Why infrastructure as code - learn terraform with phoebe</title>
+<link rel="stylesheet" href="../assets/style.css?v=2">
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">learn-terraform-with-phoebe</a> / Session 1 of 6</span>
+    <button class="btn" id="toggle-all" type="button">Expand all</button>
+    <button class="btn primary" id="zoom-toggle" type="button">Projector zoom: off</button>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="eyebrow">Learn Terraform with Phoebe · Session 1 of 6</div>
+    <h1>Why infrastructure as <span class="accent">code</span></h1>
+    <p class="sub">Most data platforms start in a web console. Someone clicks a bucket into existence, someone else adds a catalog, a third person tightens a permission on a Friday, and six months later nobody can say what the platform is, only what it does when it breaks. Infrastructure as code turns that history into a file you can read, review and run again. Tonight you write the file: you separate what you want from what exists, meet providers and resources, and run Terraform's whole loop, init, plan, apply and destroy, on your own laptop at zero cost.</p>
+    <div class="chip-row">
+      <span class="chip level">🟢 Foundations</span>
+      <span class="chip audience">Data leaders and data engineers</span>
+      <span class="chip audience">terraform or tofu CLI, no cloud account</span>
+      <span class="chip time">45 min</span>
+    </div>
+    <div class="agenda">
+      <span class="a1" style="flex:1">0-3 · Welcome</span>
+      <span class="a2" style="flex:4">3-18 · Click-ops, state, the loop</span>
+      <span class="a3" style="flex:5">18-40 · Build-along: a first config</span>
+      <span class="a4" style="flex:1">40-45 · Q&amp;A</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="section" id="intro">
+    <div class="section-kicker">
+      <span class="klabel">Part 0</span>
+      <h2>Where we start</h2>
+    </div>
+    <p class="lede">The running case is constructed. Larkspur Freight is an invented mid-size logistics company building its first data platform. Today it has a handful of storage zones and a catalog that two engineers created by hand in a cloud console, and a data lead, Priya, who has been asked by the board "what exactly do we run, and could we rebuild it?" She cannot answer either question from the console. Across six sessions Larkspur writes its platform down as Terraform code: tonight a first config, then the lake zones, the state, a reusable module, the review of a plan, and the gate that ships it. Everything runs locally with stand-in resources, so you can follow without a cloud account or a bill.</p>
+
+    <div class="legend">
+      <span class="pill">🎫 Clear all three quiz questions to stamp your passport</span>
+      <span class="pill">Live = presented in the 45 minutes</span>
+      <span class="pill">Self-study = the full depth, after class</span>
+      <span class="pill">★ Build-along = run it yourself</span>
+    </div>
+
+    <div class="callout win">
+      <p><strong>★ What you walk out with tonight.</strong> A two-sentence answer to "why not just click it?", a picture of desired state, recorded state and real infrastructure that explains every plan you will ever read, and a working Terraform directory on your laptop that you have initialised, planned, applied, broken by hand, repaired and destroyed.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-1">
+    <div class="section-kicker">
+      <span class="klabel">Part 1 · covers click-ops against infrastructure as code</span>
+      <h2>A console remembers nothing you can review</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">A cloud console is a fine way to learn what a service can do and a poor way to run a platform. Each click changes something real, and the only record is the thing itself. Infrastructure as code moves the source of truth into text: a file describes what should exist, a tool compares that description with what does exist, and a person reads the difference before anything changes.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Two panels. Left, click-ops: three people click in a console, each click changes a real bucket directly, and there is no record and no review between the click and the change. Right, infrastructure as code: a config file goes through a pull request where a person reads the plan, then the tool applies it to the real platform, and the file is the record.">
+        <defs>
+          <filter id="w1aSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="11" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w1aHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w1aAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w1aAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w1aH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w1aL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w1aS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w1aB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w1aR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w1aN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w1aH" x="30" y="26">THE SAME CHANGE, TWO WAYS</text>
+
+        <g filter="url(#w1aSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="42" width="400" height="200" rx="12" transform="rotate(-0.4 230 142)" fill="#FEF2F2" stroke="#FCA5A5"/>
+          <circle cx="78" cy="96" r="11" fill="#FFFFFF"/>
+          <circle cx="78" cy="146" r="11" fill="#FFFFFF"/>
+          <circle cx="78" cy="196" r="11" fill="#FFFFFF"/>
+          <path d="M94 96 L276 116" marker-end="url(#w1aAr)"/>
+          <path d="M94 146 L276 146" marker-end="url(#w1aAr)"/>
+          <path d="M94 196 L276 176" marker-end="url(#w1aAr)"/>
+          <rect x="290" y="96" width="120" height="100" rx="8" transform="rotate(1.5 350 146)" fill="url(#w1aHc)"/>
+          <rect x="450" y="42" width="400" height="200" rx="12" transform="rotate(0.3 650 142)" fill="#F4EEFB" stroke="#7B42BC"/>
+          <rect x="470" y="106" width="92" height="60" rx="6" transform="rotate(-1.5 516 136)" fill="#FFFFFF"/>
+          <path d="M488 124 L544 124 M488 138 L536 138 M488 152 L548 152" stroke="#D6CEE2" stroke-width="1.4"/>
+          <path d="M566 136 L600 136" marker-end="url(#w1aAr)"/>
+          <rect x="606" y="106" width="98" height="60" rx="6" transform="rotate(1 655 136)" fill="#E3F3F1" stroke="#0F766E"/>
+          <path d="M708 136 L716 136" marker-end="url(#w1aAt)"/>
+          <rect x="722" y="96" width="112" height="80" rx="8" transform="rotate(-1.2 778 136)" fill="url(#w1aHc)"/>
+          <path d="M516 172 C540 214 700 214 770 182" stroke-dasharray="5 5"/>
+        </g>
+
+        <text class="w1aL" x="50" y="66">✗ Click-ops</text>
+        <text class="w1aS" x="96" y="88">Ana clicks</text>
+        <text class="w1aS" x="96" y="138">Ben clicks</text>
+        <text class="w1aS" x="96" y="216">a Friday fix</text>
+        <text class="w1aL" x="350" y="214" text-anchor="middle">real bucket</text>
+        <text class="w1aR" x="50" y="232">no record, no review, no rebuild</text>
+        <text class="w1aL" x="470" y="66">✓ Infrastructure as code</text>
+        <text class="w1aL" x="516" y="98" text-anchor="middle">main.tf</text>
+        <text class="w1aB" x="655" y="132" text-anchor="middle">plan, read</text>
+        <text class="w1aB" x="655" y="148" text-anchor="middle">in a PR</text>
+        <text class="w1aL" x="778" y="90" text-anchor="middle">real bucket</text>
+        <text class="w1aS" x="640" y="228" text-anchor="middle">the file is the record and the rebuild</text>
+
+        <text class="w1aN" x="30" y="274">On the right a person reads the difference before it happens. On the left the change is the first thing anyone sees.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - code does not remove people from the change; it moves the moment of review in front of it</figcaption>
+    </figure>
+
+    <details class="card" open>
+      <summary><span class="mode live">Live</span>What click-ops costs a data team<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>A console change has three properties that hurt later. It is <strong>invisible</strong>: the bucket's retention was set to 30 days by someone, at some time, for some reason, and the console shows only the 30. It is <strong>unreviewed</strong>: the change happens at the moment of the click, so the first reviewer is production. And it is <strong>unrepeatable</strong>: building the same platform in a second region, or rebuilding after an accident, means replaying hundreds of clicks from memory.</p>
+        <p>Data platforms feel this sooner than most systems because they are long-lived and full of state that matters: zones that hold years of files, catalogs that point at them, grants that decide who reads what. Larkspur's two engineers can each describe half the platform. Neither can describe all of it, and the console cannot either.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>What code buys, and what it does not<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Written as code, the platform gains what software already has: version history (who changed retention, when, and the pull request that says why), review before change, the same definition reused for dev and prod, and a rebuild that is a command rather than an archaeology project. HashiCorp's own exam objectives open with exactly this: explain what IaC is and the advantages of IaC patterns.</p>
+        <p>It does not make a change safe by itself. A config can describe a terrible platform precisely, and a plan nobody reads protects nobody. Session 5 is about reading plans well, and session 6 about making sure one is always read. Code also does not cover everything: an object created in the console stays outside Terraform until someone imports it, which session 3 shows.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>The rebuild question.</strong> A familiar moment in any data team: an auditor or a new head of platform asks for an inventory of what runs in production and how each piece is configured. With click-ops the answer is a week of screenshots that are out of date by Monday. With code the answer is the repository, and the honest follow-up question becomes "is everything in it?", which is a much smaller problem.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-2">
+    <div class="section-kicker">
+      <span class="klabel">Part 2 · covers desired state, recorded state and idempotence</span>
+      <h2>Three versions of the truth, and the plan between them</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">Terraform is declarative: you describe the end state, not the steps to reach it. To act on that description it keeps three things apart. The configuration says what you want. The real infrastructure is what exists. The state file is Terraform's record of which real object belongs to which block of your configuration. A plan is the difference between what you want and what exists, worked out through that record.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Three boxes. Desired: the configuration, main.tf. Recorded: the state file, terraform.tfstate. Actual: the real objects. Refresh reads actual into recorded. Plan compares desired with refreshed recorded and lists the difference. Apply makes actual match desired and writes the new record. When desired equals actual, plan says No changes, which is idempotence.">
+        <defs>
+          <filter id="w1bSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="23" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w1bHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w1bAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w1bAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w1bH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w1bL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w1bS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w1bB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w1bA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w1bN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w1bH" x="30" y="26">DESIRED, RECORDED, ACTUAL: WHAT EACH COMMAND READS AND WRITES</text>
+
+        <g filter="url(#w1bSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="40" y="70" width="200" height="110" rx="10" transform="rotate(-0.8 140 125)" fill="#FFFFFF"/>
+          <rect x="340" y="70" width="200" height="110" rx="10" transform="rotate(0.6 440 125)" fill="#F4EEFB"/>
+          <rect x="640" y="70" width="200" height="110" rx="10" transform="rotate(-0.5 740 125)" fill="url(#w1bHc)"/>
+          <path d="M636 112 C600 100 580 100 546 108" marker-end="url(#w1bAr)"/>
+          <path d="M244 186 C320 222 560 222 636 186" stroke="#0F766E" marker-end="url(#w1bAt)"/>
+          <path d="M244 136 L334 136" stroke-dasharray="5 4" marker-end="url(#w1bAr)"/>
+        </g>
+
+        <text class="w1bA" x="140" y="62" text-anchor="middle">DESIRED</text>
+        <text class="w1bL" x="140" y="110" text-anchor="middle">main.tf</text>
+        <text class="w1bS" x="140" y="130" text-anchor="middle">what you want</text>
+        <text class="w1bS" x="140" y="146" text-anchor="middle">you edit this</text>
+        <text class="w1bA" x="440" y="62" text-anchor="middle">RECORDED</text>
+        <text class="w1bL" x="440" y="110" text-anchor="middle">terraform.tfstate</text>
+        <text class="w1bS" x="440" y="130" text-anchor="middle">which real object is</text>
+        <text class="w1bS" x="440" y="146" text-anchor="middle">which block</text>
+        <text class="w1bA" x="740" y="62" text-anchor="middle">ACTUAL</text>
+        <text class="w1bL" x="740" y="122" text-anchor="middle">the real objects</text>
+        <text class="w1bS" x="590" y="94" text-anchor="middle">refresh reads</text>
+        <text class="w1bS" x="290" y="126" text-anchor="middle">plan diffs</text>
+        <text class="w1bB" x="440" y="248" text-anchor="middle">apply makes actual match desired, then writes the record</text>
+
+        <text class="w1bN" x="30" y="282">Desired equals actual: plan prints "No changes". Run it twice and nothing happens twice. That is idempotence.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - every plan you will read is the dashed arrow: desired against a freshly refreshed record of actual</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>Declarative means you describe the end, not the steps<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>A script says "create a bucket, then set retention to 30". Run it twice and you either get two buckets or an error. A declarative config says "there is a bucket with retention 30". Terraform works out the steps: create it if it is missing, change retention if it differs, do nothing if it already matches. The second run of the same config does nothing, and says so. That property, idempotence, is what makes it safe to run Terraform again and again in a pipeline.</p>
+        <p>You will see it in the build-along tonight: the second <code>terraform plan</code> prints "No changes. Your infrastructure matches the configuration."</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>Why a separate record at all<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Terraform cannot simply look at the cloud and guess which bucket is "the raw zone in your config". Many objects look alike, and names can change. The state file binds each resource address in your config, such as <code>local_file.readme</code>, to one real object and its id. Before every plan Terraform refreshes that record by asking the provider what the object looks like now, then compares your config against the refreshed record.</p>
+        <p>That record is powerful and easy to damage, which is why session 3 is spent entirely on it: what it holds (including secrets in plain text), where to keep it, how to lock it, and how to repair it without hand-editing.</p>
+      </div>
+    </details>
+
+    <div class="callout tip">
+      <p><strong>Read every plan through the three boxes.</strong> When a plan surprises you, ask which box moved. Did someone edit the config (desired), did someone change the real thing in a console (actual), or did the record lose track of something (recorded)? Session 3 breaks each one on purpose.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-3">
+    <div class="section-kicker">
+      <span class="klabel">Part 3 · covers providers, resources and the core loop</span>
+      <h2>Providers, resources, and four commands</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">Terraform itself knows nothing about buckets or warehouses. Providers are plugins that teach it one platform each: hashicorp/aws, hashicorp/google, snowflakedb/snowflake, databricks/databricks, and tonight two that run on any laptop, hashicorp/local and hashicorp/random. A resource block names a type from a provider and a local name, and that pair is the resource's address. The same four commands drive every provider, which is how one tool covers several clouds and services at once.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The core loop as four stations on a track: init downloads providers from the registry and writes the lock file; plan refreshes and diffs and changes nothing; apply makes the changes and updates state; destroy removes everything the state records. Plan is highlighted in teal as the step where a person reads the change.">
+        <defs>
+          <filter id="w1cSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="37" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <marker id="w1cAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w1cH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w1cL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w1cS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w1cB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w1cV { font: 800 16px Inter, sans-serif; fill: #4A2478; }
+          .w1cN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w1cH" x="30" y="26">THE CORE LOOP, AND WHAT EACH COMMAND TOUCHES</text>
+
+        <g filter="url(#w1cSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="40" y="60" width="180" height="150" rx="10" transform="rotate(-0.6 130 135)" fill="#FFFFFF"/>
+          <rect x="250" y="60" width="180" height="150" rx="10" transform="rotate(0.5 340 135)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="460" y="60" width="180" height="150" rx="10" transform="rotate(-0.4 550 135)" fill="#F4EEFB"/>
+          <rect x="670" y="60" width="180" height="150" rx="10" transform="rotate(0.6 760 135)" fill="#FFFFFF"/>
+          <path d="M222 135 L244 135" marker-end="url(#w1cAr)"/>
+          <path d="M432 135 L454 135" marker-end="url(#w1cAr)"/>
+          <path d="M642 135 L664 135" marker-end="url(#w1cAr)"/>
+          <path d="M550 216 C540 250 360 250 344 218" stroke-dasharray="5 4" marker-end="url(#w1cAr)"/>
+        </g>
+
+        <text class="w1cV" x="130" y="92" text-anchor="middle">init</text>
+        <text class="w1cS" x="130" y="118" text-anchor="middle">downloads providers</text>
+        <text class="w1cS" x="130" y="134" text-anchor="middle">from the registry</text>
+        <text class="w1cS" x="130" y="150" text-anchor="middle">writes the lock file</text>
+        <text class="w1cS" x="130" y="166" text-anchor="middle">once per directory</text>
+        <text class="w1cV" x="340" y="92" text-anchor="middle">plan</text>
+        <text class="w1cS" x="340" y="118" text-anchor="middle">refreshes, then diffs</text>
+        <text class="w1cS" x="340" y="134" text-anchor="middle">desired against actual</text>
+        <text class="w1cB" x="340" y="158" text-anchor="middle">changes nothing</text>
+        <text class="w1cB" x="340" y="174" text-anchor="middle">a person reads it</text>
+        <text class="w1cV" x="550" y="92" text-anchor="middle">apply</text>
+        <text class="w1cS" x="550" y="118" text-anchor="middle">plans again, then acts</text>
+        <text class="w1cS" x="550" y="134" text-anchor="middle">in dependency order</text>
+        <text class="w1cS" x="550" y="150" text-anchor="middle">updates the state</text>
+        <text class="w1cV" x="760" y="92" text-anchor="middle">destroy</text>
+        <text class="w1cS" x="760" y="118" text-anchor="middle">removes everything</text>
+        <text class="w1cS" x="760" y="134" text-anchor="middle">the state records,</text>
+        <text class="w1cS" x="760" y="150" text-anchor="middle">in reverse order</text>
+        <text class="w1cS" x="450" y="262" text-anchor="middle">edit the config, plan again</text>
+
+        <text class="w1cN" x="30" y="288">validate and fmt sit beside the loop (sessions 2 and 6). Every command here works the same with tofu.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - only apply and destroy change anything real; plan is the cheap, safe step to repeat as often as you like</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>Providers are plugins, pinned by version<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>A <code>required_providers</code> block says which providers the config needs, where they come from and which versions are acceptable. <code>terraform init</code> finds a matching version in the public registry, downloads it into the hidden <code>.terraform</code> folder, and records the exact version and checksums it chose in <code>.terraform.lock.hcl</code>. HashiCorp's own advice, printed by init itself, is to commit that lock file so everyone and every pipeline gets the same provider. Session 4 covers version constraints and the lock file properly.</p>
+        <p>A resource block then uses a type from a provider: <code>resource "local_file" "readme"</code> has type <code>local_file</code> from hashicorp/local and local name <code>readme</code>. Its address, <code>local_file.readme</code>, is how plans, state and every later command refer to it.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>Terraform or OpenTofu on your laptop<span class="mini">2 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Two command-line tools read the same configuration language. Terraform is HashiCorp's, now owned by IBM, under the Business Source License since version 1.6.0. OpenTofu is the open-source fork under the Linux Foundation, released as a drop-in replacement in January 2024 and licensed MPL 2.0. For every build-along on these pages either works: type <code>tofu</code> where the page says <code>terraform</code>. Session 6 explains the split and what it means for a data team choosing one.</p>
+        <p>The outputs on these pages were produced by Terraform 1.17.1. Install it from HashiCorp's download page, or OpenTofu from opentofu.org, and check with <code>terraform version</code> or <code>tofu version</code>.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>One tool, many platforms.</strong> A data team's platform rarely lives in one place: object storage in one cloud, a warehouse such as Snowflake, a lakehouse such as Databricks, and identity somewhere else. Each has its own Terraform provider, so one repository and one review process can describe all of them. Session 4 shows the same Larkspur zone module written against four of those providers, shown and not applied.</p>
+    </div>
+  </section>
+
+  <section class="section" id="demo-1">
+    <div class="section-kicker">
+      <span class="klabel">Build-along</span>
+      <h2>A first config, through the whole loop</h2>
+      <span class="tag demo">★ 22 min · everyone builds</span>
+    </div>
+    <p class="lede">Priya's first step for Larkspur is deliberately small: one random id that stands in for a platform build number, and one file that stands in for a real resource and uses that id. Both providers run locally, so nothing here costs money or touches a cloud. Make an empty folder, open a terminal in it, and follow along. Every output below was really run with Terraform 1.17.1; your ids and hashes will differ.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Two resources. local_file.readme uses random_id.platform.hex in its content, so an arrow from the file points to the id it needs. Apply creates random_id.platform first, then local_file.readme. Destroy goes the other way: the file first, then the id.">
+        <defs>
+          <filter id="w1dSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="41" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <marker id="w1dAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w1dAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w1dH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w1dL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w1dS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w1dB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w1dA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w1dN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w1dH" x="30" y="26">THE REFERENCE IS THE DEPENDENCY, AND THE DEPENDENCY IS THE ORDER</text>
+
+        <g filter="url(#w1dSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="60" y="60" width="230" height="70" rx="10" transform="rotate(-0.8 175 95)" fill="#F4EEFB"/>
+          <rect x="560" y="60" width="230" height="70" rx="10" transform="rotate(0.7 675 95)" fill="#FFFFFF"/>
+          <path d="M556 95 L296 95" marker-end="url(#w1dAr)"/>
+          <path d="M175 150 C175 190 640 190 668 150" stroke="#0F766E" marker-end="url(#w1dAt)"/>
+        </g>
+
+        <text class="w1dL" x="175" y="90" text-anchor="middle">random_id.platform</text>
+        <text class="w1dS" x="175" y="108" text-anchor="middle">hex = 7f2412a7 (yours differs)</text>
+        <text class="w1dL" x="675" y="90" text-anchor="middle">local_file.readme</text>
+        <text class="w1dS" x="675" y="108" text-anchor="middle">content uses ...platform.hex</text>
+        <text class="w1dA" x="426" y="86" text-anchor="middle">needs</text>
+        <text class="w1dB" x="420" y="174" text-anchor="middle">apply: id first, then the file</text>
+        <text class="w1dS" x="420" y="204" text-anchor="middle">destroy runs the same edge backwards: the file first, then the id</text>
+
+        <text class="w1dN" x="30" y="236">You never wrote an order. Terraform read it from the reference, as terraform graph will show.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - the arrow points from a resource to what it needs; apply walks it one way, destroy the other</figcaption>
+    </figure>
+
+    <div class="steps">
+      <div class="step">
+        <p><strong>Write the config.</strong> Save this as <code>main.tf</code>. The <code>terraform</code> block pins two providers; the two resource blocks are the whole platform for now. The file's content refers to the id, which is how Terraform learns the order.</p>
+        <div class="prompt-box good"><span class="label">★ Step 1 · main.tf</span>terraform {
+  required_providers {
+    local  = { source = "hashicorp/local", version = "~&gt; 2.5" }
+    random = { source = "hashicorp/random", version = "~&gt; 3.6" }
+  }
+}
+
+resource "random_id" "platform" {
+  byte_length = 4
+}
+
+resource "local_file" "readme" {
+  filename = "${path.module}/out/README.txt"
+  content  = "Larkspur Freight data platform, build ${random_id.platform.hex}\n"
+}</div>
+      </div>
+      <div class="step">
+        <p><strong>Initialise the directory.</strong> init reads <code>required_providers</code>, downloads matching versions and writes the lock file. It needs the network once; nothing is created yet.</p>
+        <div class="prompt-box good"><span class="label">★ Step 2 · terraform init (trimmed)</span>$ terraform init
+Initializing the backend...
+
+Initializing provider plugins...
+- Finding hashicorp/local versions matching "~&gt; 2.5"...
+- Finding hashicorp/random versions matching "~&gt; 3.6"...
+- Installed hashicorp/local v2.9.1 (signed by HashiCorp)
+- Installed hashicorp/random v3.9.1 (signed by HashiCorp)
+
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+...
+Terraform has been successfully initialized!</div>
+      </div>
+      <div class="step">
+        <p><strong>Plan, and read it.</strong> The <code>+</code> symbol means create. Values Terraform cannot know until the object exists, like the random hex, read "known after apply". The last line is the one to read first.</p>
+        <div class="prompt-box good"><span class="label">★ Step 3 · terraform plan (trimmed)</span>$ terraform plan
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # local_file.readme will be created
+  + resource "local_file" "readme" {
+      + content              = (known after apply)
+      + filename             = "./out/README.txt"
+      + id                   = (known after apply)
+      ...
+    }
+
+  # random_id.platform will be created
+  + resource "random_id" "platform" {
+      + byte_length = 4
+      + hex         = (known after apply)
+      ...
+    }
+
+Plan: 2 to add, 0 to change, 0 to destroy.</div>
+      </div>
+      <div class="step">
+        <p><strong>Apply.</strong> In class we pass <code>-auto-approve</code> to skip the yes prompt; in real work you read the plan and type yes, or apply a saved plan (session 6). Watch the order: the id is created before the file that uses it.</p>
+        <div class="prompt-box good"><span class="label">★ Step 4 · terraform apply</span>$ terraform apply -auto-approve
+...
+Plan: 2 to add, 0 to change, 0 to destroy.
+random_id.platform: Creating...
+random_id.platform: Creation complete after 0s [id=fyQSpw]
+local_file.readme: Creating...
+local_file.readme: Creation complete after 0s [id=7f976794dce28748ccac82819c2640f3f41a2aaf]
+
+Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
+
+$ cat out/README.txt
+Larkspur Freight data platform, build 7f2412a7</div>
+      </div>
+      <div class="step">
+        <p><strong>Plan again: idempotence.</strong> Same config, nothing changed outside. Terraform refreshes both objects and finds nothing to do.</p>
+        <div class="prompt-box good"><span class="label">★ Step 5 · the second plan</span>$ terraform plan
+random_id.platform: Refreshing state... [id=fyQSpw]
+local_file.readme: Refreshing state... [id=7f976794dce28748ccac82819c2640f3f41a2aaf]
+
+No changes. Your infrastructure matches the configuration.</div>
+      </div>
+      <div class="step">
+        <p><strong>Break the actual box by hand.</strong> Delete the file, the way someone might delete a bucket in a console, and plan. Desired did not change, actual did, so the plan puts it back. Apply to repair it.</p>
+        <div class="prompt-box good"><span class="label">★ Step 6 · drift, then repair</span>$ rm out/README.txt
+$ terraform plan
+...
+  # local_file.readme will be created
+  + resource "local_file" "readme" {
+      + content              = &lt;&lt;-EOT
+            Larkspur Freight data platform, build 7f2412a7
+        EOT
+      ...
+Plan: 1 to add, 0 to change, 0 to destroy.
+
+$ terraform apply -auto-approve
+...
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.</div>
+      </div>
+      <div class="step">
+        <p><strong>See the graph, then destroy.</strong> <code>terraform graph</code> prints the dependency Terraform inferred, in the DOT format graph tools read. Destroy walks it backwards: the file goes before the id it depends on.</p>
+        <div class="prompt-box good"><span class="label">★ Step 7 · graph and destroy</span>$ terraform graph
+digraph G {
+  rankdir = "RL";
+  node [shape = rect, fontname = "sans-serif"];
+  "local_file.readme" [label="local_file.readme"];
+  "random_id.platform" [label="random_id.platform"];
+  "local_file.readme" -&gt; "random_id.platform";
+}
+
+$ terraform destroy -auto-approve
+...
+Plan: 0 to add, 0 to change, 2 to destroy.
+local_file.readme: Destroying... [id=7f976794dce28748ccac82819c2640f3f41a2aaf]
+local_file.readme: Destruction complete after 0s
+random_id.platform: Destroying... [id=fyQSpw]
+random_id.platform: Destruction complete after 0s
+
+Destroy complete! Resources: 2 destroyed.</div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <p><strong>Keep the folder.</strong> Session 2 grows it into Larkspur's lake zones. If you destroyed everything, that is fine: <code>terraform apply</code> rebuilds it from the file in one command, which is the whole argument of tonight in a single line.</p>
+    </div>
+  </section>
+
+  <section class="section" id="exercise">
+    <div class="section-kicker">
+      <span class="klabel">Homework</span>
+      <h2>Before session 2</h2>
+      <span class="tag exercise">30 min</span>
+    </div>
+    <ol>
+      <li><strong>Change the content and plan.</strong> Edit the sentence inside <code>content</code> and run <code>terraform plan</code>. Read the symbol it uses and the line ending in <code># forces replacement</code>, and write one sentence on why a file cannot be edited in place by this provider.</li>
+      <li><strong>Open the lock file.</strong> Read <code>.terraform.lock.hcl</code> and find the exact provider versions init chose. Delete the <code>.terraform</code> folder and run <code>terraform init</code> again: does it pick the same versions?</li>
+      <li><strong>List one click-ops object at work.</strong> Name one piece of your team's data platform that exists only because someone clicked it. Who could rebuild it today, and from what?</li>
+      <li><strong>Try tofu, if you like.</strong> Install OpenTofu and run the same folder with <code>tofu init</code> and <code>tofu plan</code>. Note anything that differs.</li>
+    </ol>
+  </section>
+
+  <section class="section" id="quiz">
+    <div class="section-kicker">
+      <span class="klabel">Check yourself</span>
+      <h2>Three questions</h2>
+    </div>
+    <p>Clear all three and session 1 gets stamped in your passport.</p>
+
+    <div class="quiz-q" data-answer="2">
+      <p class="qtext">1 · You apply a config, then run <code>terraform plan</code> on the same config. Nobody changed anything in between. What does the plan show, and why?</p>
+      <button class="qopt" type="button">A · The same additions again, because plan always lists every resource</button>
+      <button class="qopt" type="button">B · An error, because the objects already exist</button>
+      <button class="qopt" type="button">C · "No changes", because desired already matches actual; that is idempotence</button>
+      <button class="qopt" type="button">D · A replacement of every resource, to keep them fresh</button>
+      <p class="qwhy">A declarative tool describes the end state, so once actual matches desired there is nothing left to do, and the plan reads "No changes. Your infrastructure matches the configuration." Note the contrast: plan itself never changes anything, so two plans with no apply between them would both list the same additions.</p>
+    </div>
+
+    <div class="quiz-q" data-answer="0">
+      <p class="qtext">2 · Someone deletes Larkspur's README file by hand. Which of the three boxes moved, and what does the next plan do?</p>
+      <button class="qopt" type="button">A · Actual moved; refresh notices the file is gone and the plan proposes creating it again</button>
+      <button class="qopt" type="button">B · Desired moved; the plan removes the resource from the config</button>
+      <button class="qopt" type="button">C · Nothing moved; Terraform only reads the state file, so the plan shows no changes</button>
+      <button class="qopt" type="button">D · Recorded moved; the state file deletes itself</button>
+      <p class="qwhy">The config still says the file should exist, and refresh reads the real world before the diff, so the plan shows "1 to add". C is the common misunderstanding: Terraform does not trust the state blindly; it refreshes it first.</p>
+    </div>
+
+    <div class="quiz-q" data-answer="3">
+      <p class="qtext">3 · In the build-along, why is <code>random_id.platform</code> created before <code>local_file.readme</code>?</p>
+      <button class="qopt" type="button">A · Because it is declared first in the file</button>
+      <button class="qopt" type="button">B · Because Terraform creates resources in alphabetical order</button>
+      <button class="qopt" type="button">C · By chance; the order can differ between runs</button>
+      <button class="qopt" type="button">D · Because the file's content refers to <code>random_id.platform.hex</code>, which makes the file depend on the id</button>
+      <p class="qwhy">A reference is a dependency, and Terraform builds a graph from the references. Declaration order in the file does not matter; session 5's bench shuffles the blocks to prove it. Resources with no dependency between them can run in parallel.</p>
+    </div>
+
+    <p class="quiz-score"></p>
+  </section>
+
+  <section class="section" id="official">
+    <div class="section-kicker">
+      <span class="klabel">Sources covered</span>
+      <h2>What this session teaches, and where it came from</h2>
+    </div>
+    <div class="covered">
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform Associate (004) exam content list</span><span class="note">Objectives 1a, 1b, 1c (IaC and its advantages, multi-cloud workflows), 2b (providers), 3a, 3b, 3d, 3e, 3f (workflow, init, plan, apply, destroy), read at developer.hashicorp.com</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform CLI docs: plan, apply, graph</span><span class="note">Plan symbols and summary line, "known after apply", parallel graph walk, DOT output of terraform graph, read at source</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform 1.17.1 with hashicorp/local 2.9.1 and hashicorp/random 3.9.1</span><span class="note">Every command output on this page, really run; ids and hashes will differ on your machine</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Licence and OpenTofu facts</span><span class="note">BSL from 1.6.0, OpenTofu GA in January 2024 under the Linux Foundation as a drop-in replacement, MPL 2.0; full detail in session 6</span></div>
+      <div class="covered-row"><span class="status pill light">◐</span><span class="name">Larkspur Freight, Priya and the platform</span><span class="note">Constructed for teaching; no number about them is a measurement</span></div>
+    </div>
+    <p class="mono" style="margin-top:14px">Every fact on this page, and its verification tier, is recorded in the course's source map.</p>
+  </section>
+
+  <section class="cheat" id="cheatsheet">
+    <h3>Session 1 cheat sheet <span>· pin this</span></h3>
+    <div class="grid-2">
+      <div class="cheat-item"><b>Three boxes</b><span>Desired (config), recorded (state), actual (real). A plan is desired against refreshed actual.</span></div>
+      <div class="cheat-item"><b>Declarative</b><span>Describe the end state; Terraform works out the steps. Same config twice: "No changes".</span></div>
+      <div class="cheat-item"><b>Provider + resource</b><span>A provider is a plugin per platform. <code>resource "type" "name"</code> gives the address <code>type.name</code>.</span></div>
+      <div class="cheat-item"><b>The loop</b><span><code>init</code> once, <code>plan</code> often, <code>apply</code> after reading, <code>destroy</code> walks the graph backwards.</span></div>
+      <div class="cheat-item"><b>Symbols so far</b><span><code>+</code> create, <code>-</code> destroy, "known after apply" for values that do not exist yet.</span></div>
+      <div class="cheat-item"><b>Order</b><span>A reference is a dependency. Terraform reads the order from the graph, never from the file.</span></div>
+    </div>
+  </section>
+
+  <div class="callout next">
+    <span class="nx-pill">Next session</span>
+    <p>One id and one file is not a platform. Session 2 writes Larkspur's lake: raw, curated and serving zones for dev and prod, driven by variables, validated, looped with for_each, and read back through outputs and a data source, and shows why for_each keys survive a change that count indexes do not.</p>
+  </div>
+
+  <footer class="pagefoot">
+    <span>Session 1 of 6 · learn-terraform-with-phoebe · by Phoebe Fu &nbsp;·&nbsp; 📚 <a href="https://phoebefu6.github.io/learn-with-phoebe/">Learn with Phoebe ↗</a></span>
+    <span><a href="../index.html">← Course home</a> &nbsp;·&nbsp; <a href="02-the-hcl-language.html">Next: The HCL language →</a></span>
+  </footer>
+
+</main>
+
+<script src="../assets/app.js?v=1"></script>
+</body>
+</html>

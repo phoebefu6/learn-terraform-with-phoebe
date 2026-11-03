@@ -1,0 +1,92 @@
+
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+[exit 0]
+$ terraform state list
+local_file.zone["curated"]
+local_file.zone["raw"]
+local_file.zone["serving"]
+[exit 0]
+$ terraform state show local_file.zone["raw"]
+# local_file.zone["raw"]:
+resource "local_file" "zone" {
+    content              = <<-EOT
+        zone=raw env=dev
+    EOT
+    content_base64sha256 = "Mvj5SsD983HjvJPTLhTYTpitbYU4UwxommrOePVH86c="
+    content_base64sha512 = "sUGWihcfn43/8z9bPwD8LzZe9VYPSmLyGmBDGQwdF0PAYpBIa5hVS1I+QSQyGhlUKL7ST0+0cHGWGNF1Lm9dsQ=="
+    content_md5          = "5a2799873927a955301d9ce9b78d81f8"
+    content_sha1         = "2d18145fe7adc7af527ec22fec11794e1716e524"
+    content_sha256       = "32f8f94ac0fdf371e3bc93d32e14d84e98ad6d8538530c689a6ace78f547f3a7"
+    content_sha512       = "b141968a171f9f8dfff33f5b3f00fc2f365ef5560f4a62f21a6043190c1d1743c06290486b98554b523e4124321a195428bed24f4fb470719618d1752e6f5db1"
+    directory_permission = "0777"
+    file_permission      = "0777"
+    filename             = "./lake/larkspur-dev-raw/ZONE.txt"
+    id                   = "2d18145fe7adc7af527ec22fec11794e1716e524"
+}
+[exit 0]
+$ echo "edited in the console" >> lake/larkspur-dev-raw/ZONE.txt
+$ terraform plan -refresh-only
+local_file.zone["serving"]: Refreshing state... [id=6bd6387a15ae8f03b6f60d561a6d5bd2f4f73559]
+local_file.zone["curated"]: Refreshing state... [id=1901e695492251a098080c221d12e05213c0a83b]
+local_file.zone["raw"]: Refreshing state... [id=2d18145fe7adc7af527ec22fec11794e1716e524]
+
+Note: Objects have changed outside of Terraform
+
+Terraform detected the following changes made outside of Terraform since the
+last "terraform apply" which may have affected this plan:
+
+  # local_file.zone["raw"] has been deleted
+  - resource "local_file" "zone" {
+      - content              = <<-EOT
+            zone=raw env=dev
+        EOT -> null
+      - content_base64sha256 = "Mvj5SsD983HjvJPTLhTYTpitbYU4UwxommrOePVH86c=" -> null
+      - content_base64sha512 = "sUGWihcfn43/8z9bPwD8LzZe9VYPSmLyGmBDGQwdF0PAYpBIa5hVS1I+QSQyGhlUKL7ST0+0cHGWGNF1Lm9dsQ==" -> null
+      - content_md5          = "5a2799873927a955301d9ce9b78d81f8" -> null
+      - content_sha1         = "2d18145fe7adc7af527ec22fec11794e1716e524" -> null
+      - content_sha256       = "32f8f94ac0fdf371e3bc93d32e14d84e98ad6d8538530c689a6ace78f547f3a7" -> null
+      - content_sha512       = "b141968a171f9f8dfff33f5b3f00fc2f365ef5560f4a62f21a6043190c1d1743c06290486b98554b523e4124321a195428bed24f4fb470719618d1752e6f5db1" -> null
+      - directory_permission = "0777" -> null
+      - file_permission      = "0777" -> null
+      - filename             = "./lake/larkspur-dev-raw/ZONE.txt" -> null
+      - id                   = "2d18145fe7adc7af527ec22fec11794e1716e524" -> null
+    }
+
+
+This is a refresh-only plan, so Terraform will not take any actions to undo
+these. If you were expecting these changes then you can apply this plan to
+record the updated values in the Terraform state without changing any remote
+objects.
+
+─────────────────────────────────────────────────────────────────────────────
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.
+[exit 0]
+$ terraform plan
+local_file.zone["raw"]: Refreshing state... [id=2d18145fe7adc7af527ec22fec11794e1716e524]
+local_file.zone["serving"]: Refreshing state... [id=6bd6387a15ae8f03b6f60d561a6d5bd2f4f73559]
+local_file.zone["curated"]: Refreshing state... [id=1901e695492251a098080c221d12e05213c0a83b]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # local_file.zone["raw"] will be created
+  + resource "local_file" "zone" {
+      + content              = <<-EOT
+            zone=raw env=dev
+        EOT
+      + filename             = "./lake/larkspur-dev-raw/ZONE.txt"
+      + id                   = (known after apply)
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+
+─────────────────────────────────────────────────────────────────────────────
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.
+[exit 0]

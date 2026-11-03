@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- social:start -->
+<meta name="description" content="Session 6 of 6. Ship Terraform changes safely: per-environment directories against workspaces, a plan on every pull request and an apply only on merge, saved plans that refuse to apply when stale, HCP Terraform against self-run against OpenTofu, the BSL and MPL licence split, and a map of the Terraform Associate (004) exam.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Learn with Phoebe">
+<meta property="og:title" content="Plan on the PR, apply on merge - learn terraform with phoebe">
+<meta property="og:description" content="Session 6 of 6. The gate that makes sure every plan is read, and the licence and tooling choices behind it.">
+<meta property="og:url" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/courses/06-plan-on-pr-apply-on-merge.html">
+<meta property="og:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Plan on the PR, apply on merge - learn terraform with phoebe">
+<meta name="twitter:description" content="Session 6 of 6. Directories, a pull-request gate, stale plans, HCP Terraform, OpenTofu and the licence split.">
+<meta name="twitter:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<!-- social:end -->
+<title>Session 6 · Plan on the PR, apply on merge - learn terraform with phoebe</title>
+<link rel="stylesheet" href="../assets/style.css?v=2">
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">learn-terraform-with-phoebe</a> / Session 6 of 6</span>
+    <button class="btn" id="toggle-all" type="button">Expand all</button>
+    <button class="btn primary" id="zoom-toggle" type="button">Projector zoom: off</button>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="eyebrow">Learn Terraform with Phoebe · Session 6 of 6</div>
+    <h1>Plan on the PR, apply on <span class="accent">merge</span></h1>
+    <p class="sub">Session 5 taught you to read a plan. Tonight makes sure a plan is always there to read. You lay out environments so a mistake in dev cannot reach prod, put a plan on every pull request and an apply only behind the merge, and see why a saved plan refuses to apply once someone else has changed the state. Then the decisions a data leader owns: run it yourself or on HCP Terraform, Terraform or OpenTofu, and what the 2023 licence change means for a data team. The page closes with a map of the Terraform Associate (004) exam against all six sessions.</p>
+    <div class="chip-row">
+      <span class="chip level">🟠 Deeper</span>
+      <span class="chip audience">Leaders who choose, engineers who wire it</span>
+      <span class="chip audience">terraform or tofu CLI; workflow YAML shown</span>
+      <span class="chip time">45 min</span>
+    </div>
+    <div class="agenda">
+      <span class="a1" style="flex:1">0-3 · Welcome</span>
+      <span class="a2" style="flex:4">3-18 · Environments, the gate, the licence</span>
+      <span class="a3" style="flex:5">18-40 · Build-along: the gate on your laptop</span>
+      <span class="a4" style="flex:1">40-45 · Q&amp;A</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="section" id="intro">
+    <div class="section-kicker">
+      <span class="klabel">Part 0</span>
+      <h2>Where we start</h2>
+    </div>
+    <p class="lede">The running case is constructed. Larkspur Freight now has its lake zones, a data-zone module used by dev and prod, a state it knows how to repair, and a data lead, Priya, who reads plans properly. What it does not have is a rule that a plan is always read. Engineers still run <code>terraform apply</code> from their laptops, with their own credentials, against whichever environment their shell happens to point at. Tonight Larkspur moves every change into a pull request, and Priya takes three decisions to the leadership team: how to lay out environments, where Terraform runs, and which Terraform.</p>
+
+    <div class="legend">
+      <span class="pill">🎫 Clear all three quiz questions to stamp your passport</span>
+      <span class="pill">Live = presented in the 45 minutes</span>
+      <span class="pill">Self-study = the full depth, after class</span>
+      <span class="pill">★ Build-along = run it yourself</span>
+    </div>
+
+    <div class="callout win">
+      <p><strong>★ What you walk out with tonight.</strong> An environment layout that keeps dev mistakes out of prod, a pull-request workflow where the plan is posted for review and the apply happens only after merge, the reason a saved plan goes stale and why that is a feature, a clear position on HCP Terraform, self-run and OpenTofu with the licence facts behind it, and a map of which session prepared you for each objective of the Associate (004) exam.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-1">
+    <div class="section-kicker">
+      <span class="klabel">Part 1 · covers workspaces against per-environment directories</span>
+      <h2>Two ways to hold dev and prod, and why directories win for data</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">CLI workspaces let one directory keep several states, one per workspace, under the same backend. Per-environment directories give each environment its own small root configuration and its own backend, calling the same shared module. Both reuse code. Only one keeps the environments apart where it matters: in credentials, in state and in the blast radius of a mistake.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Two layouts. Left, CLI workspaces: one directory and one backend hold a dev state and a prod state side by side; which one a command touches depends on the selected workspace, and the same credentials reach both. Right, directories per environment: envs/dev and envs/prod each have their own root config, own backend and own credentials, and both call modules/data-zone. A mistake in dev cannot reach the prod state.">
+        <defs>
+          <filter id="w6aSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="63" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w6aHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w6aAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w6aH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w6aL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w6aS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w6aB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w6aR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w6aN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w6aH" x="30" y="26">SAME MODULE, TWO LAYOUTS</text>
+
+        <g filter="url(#w6aSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="44" width="390" height="230" rx="12" transform="rotate(-0.4 225 159)" fill="#FEF2F2" stroke="#FCA5A5"/>
+          <rect x="60" y="92" width="330" height="56" rx="8" transform="rotate(0.6 225 120)" fill="#FFFFFF"/>
+          <rect x="60" y="176" width="150" height="56" rx="8" transform="rotate(-1.2 135 204)" fill="url(#w6aHc)"/>
+          <rect x="240" y="176" width="150" height="56" rx="8" transform="rotate(1.2 315 204)" fill="url(#w6aHc)"/>
+          <path d="M135 152 L135 170" marker-end="url(#w6aAr)"/>
+          <path d="M315 152 L315 170" marker-end="url(#w6aAr)"/>
+          <rect x="460" y="44" width="390" height="230" rx="12" transform="rotate(0.3 655 159)" fill="#F4EEFB" stroke="#7B42BC"/>
+          <rect x="480" y="92" width="160" height="70" rx="8" transform="rotate(-1 560 127)" fill="#FFFFFF"/>
+          <rect x="670" y="92" width="160" height="70" rx="8" transform="rotate(1 750 127)" fill="#FFFFFF"/>
+          <rect x="560" y="200" width="190" height="50" rx="8" transform="rotate(0.5 655 225)" fill="#E3F3F1" stroke="#0F766E"/>
+          <path d="M560 166 C570 186 600 194 616 196" marker-end="url(#w6aAr)"/>
+          <path d="M750 166 C740 186 710 194 694 196" marker-end="url(#w6aAr)"/>
+        </g>
+
+        <text class="w6aL" x="50" y="70">✗ CLI workspaces</text>
+        <text class="w6aL" x="76" y="116">one directory, one backend</text>
+        <text class="w6aS" x="76" y="134">same credentials reach both</text>
+        <text class="w6aL" x="135" y="200" text-anchor="middle">dev state</text>
+        <text class="w6aL" x="315" y="200" text-anchor="middle">prod state</text>
+        <text class="w6aR" x="50" y="258">the selected workspace is the only fence</text>
+        <text class="w6aL" x="480" y="70">✓ A directory per environment</text>
+        <text class="w6aL" x="496" y="118">envs/dev</text>
+        <text class="w6aS" x="496" y="136">own backend, own role</text>
+        <text class="w6aL" x="686" y="118">envs/prod</text>
+        <text class="w6aS" x="686" y="136">own backend, own role</text>
+        <text class="w6aB" x="655" y="230" text-anchor="middle">modules/data-zone</text>
+
+        <text class="w6aN" x="30" y="304">HashiCorp's docs: workspaces share a backend and alone are not a suitable tool for system decomposition.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - the code is shared either way; on the right the state, the credentials and the blast radius are not</figcaption>
+    </figure>
+
+    <details class="card" open>
+      <summary><span class="mode live">Live</span>What a workspace really is<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Every initialised directory starts with one workspace called <code>default</code>. <code>terraform workspace new dev</code> creates another state for the same configuration in the same backend, and <code>terraform.workspace</code> lets the config read which one is selected, as the build-along does. HashiCorp's own page is direct about the limits: workspaces in one directory use the same backend, and "Workspaces alone are not a suitable tool for system decomposition". Its recommended alternative is reusable modules with a separate root configuration and backend per deployment.</p>
+        <p>For a data platform the difference is not tidiness. Prod holds the data. If the same person, pipeline and credentials can reach both states, the only thing between a dev experiment and the prod lake is which workspace a shell has selected.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>Directories per environment, in practice<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Larkspur's layout becomes <code>modules/data-zone/</code> (session 4), <code>envs/dev/</code> and <code>envs/prod/</code>. Each env folder holds a short <code>main.tf</code> calling the module with that environment's values, its own <code>backend</code> block pointing at its own state, and its own lock file. Pipelines for prod run with a role that can touch only prod. The duplication is a few lines per environment, and it is deliberate.</p>
+        <p>Teams with many environments sometimes add a wrapper tool such as Terragrunt to generate those small root configs; that is beyond these pages. HCP Terraform also uses the word workspace, for its own unit of state and runs organised into projects (exam objective 8c); do not confuse it with <code>terraform workspace new</code> on the CLI.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>The wrong shell.</strong> A pattern most platform teams can describe from memory: an engineer finishes testing in dev, opens another terminal to check something in prod, comes back, and applies in the terminal that is now pointed at prod. With directories and per-environment roles, that apply fails for lack of permission instead of succeeding against the wrong lake.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-2">
+    <div class="section-kicker">
+      <span class="klabel">Part 2 · covers plan on pull request, apply on merge</span>
+      <h2>The gate: a plan for every change, an apply only after review</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">The workflow most teams converge on has two halves. On every pull request, a pipeline formats, validates and plans, with a read-only role, and puts the plan where reviewers can read it. Only when the pull request is merged does a pipeline with write access apply, from the reviewed code. Nobody applies from a laptop. The plan a reviewer approved and the change that happens are tied together by the branch, and checked by Terraform itself when the state has moved.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A pull request flow. Push a branch: the pipeline runs fmt check, validate and plan with a read-only role, and posts the plan. Reviewers read it with session 5's checklist. Merge to main: the pipeline plans again with a write role and applies that saved plan. If the state changed between plan and apply, Terraform refuses the saved plan as stale, and the pipeline plans again.">
+        <defs>
+          <filter id="w6bSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="67" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <marker id="w6bAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w6bAx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#991B1B" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w6bH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w6bL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w6bS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w6bB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w6bR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w6bA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w6bN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w6bH" x="30" y="26">PULL REQUEST TO PRODUCTION, AND THE CHECK TERRAFORM ADDS</text>
+
+        <g filter="url(#w6bSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="60" width="150" height="110" rx="10" transform="rotate(-0.7 105 115)" fill="#FFFFFF"/>
+          <rect x="220" y="60" width="200" height="110" rx="10" transform="rotate(0.5 320 115)" fill="#F4EEFB"/>
+          <rect x="460" y="60" width="160" height="110" rx="10" transform="rotate(-0.5 540 115)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="660" y="60" width="190" height="110" rx="10" transform="rotate(0.6 755 115)" fill="#FFFFFF"/>
+          <path d="M184 115 L214 115" marker-end="url(#w6bAr)"/>
+          <path d="M424 115 L454 115" marker-end="url(#w6bAr)"/>
+          <path d="M624 115 L654 115" marker-end="url(#w6bAr)"/>
+          <rect x="560" y="210" width="290" height="50" rx="10" transform="rotate(-0.4 705 235)" fill="#FEF2F2" stroke="#991B1B"/>
+          <path d="M755 176 L755 204" stroke="#991B1B" marker-end="url(#w6bAx)"/>
+          <path d="M556 236 C470 236 470 196 520 176" stroke-dasharray="5 4" marker-end="url(#w6bAr)"/>
+        </g>
+
+        <text class="w6bA" x="46" y="82">1 · PUSH</text>
+        <text class="w6bL" x="46" y="104">a branch</text>
+        <text class="w6bS" x="46" y="122">opens a pull</text>
+        <text class="w6bS" x="46" y="138">request</text>
+        <text class="w6bA" x="236" y="82">2 · CHECK, READ-ONLY</text>
+        <text class="w6bS" x="236" y="104">fmt -check, validate</text>
+        <text class="w6bS" x="236" y="122">plan, posted to the PR</text>
+        <text class="w6bS" x="236" y="140">policy checks run here</text>
+        <text class="w6bA" x="476" y="82">3 · REVIEW</text>
+        <text class="w6bB" x="476" y="104">a person reads</text>
+        <text class="w6bB" x="476" y="120">both counters</text>
+        <text class="w6bS" x="476" y="140">then approves</text>
+        <text class="w6bA" x="676" y="82">4 · MERGE, WRITE ROLE</text>
+        <text class="w6bS" x="676" y="104">plan -out=tfplan</text>
+        <text class="w6bS" x="676" y="122">apply tfplan</text>
+        <text class="w6bS" x="676" y="140">from main only</text>
+        <text class="w6bR" x="576" y="232">state changed since the plan?</text>
+        <text class="w6bR" x="576" y="248">"Saved plan is stale": plan again</text>
+
+        <text class="w6bN" x="30" y="288">Nobody applies from a laptop. The reviewed branch is the change, and a stale plan cannot slip through.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - review sits between a read-only plan and a write-capable apply, and Terraform itself refuses a plan the world has moved past</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>The gate in GitHub Actions<span class="mini">4 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>HashiCorp publishes an action, <code>hashicorp/setup-terraform</code> (v4 is the current major), that installs the CLI in a GitHub Actions job; OpenTofu's equivalent is <code>opentofu/setup-opentofu</code> (v2). A minimal two-job workflow for one environment directory looks like this. It is shown, not run: it needs a repository, a remote backend and a cloud role, none of which these pages use.</p>
+        <div class="prompt-box good"><span class="label">★ .github/workflows/terraform-prod.yml · shown, not run</span>name: terraform-prod
+on:
+  pull_request:
+    paths: ["envs/prod/**", "modules/**"]
+  push:
+    branches: [main]
+    paths: ["envs/prod/**", "modules/**"]
+
+jobs:
+  plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: envs/prod } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v4
+      - run: terraform fmt -check -recursive
+      - run: terraform init -input=false
+      - run: terraform validate
+      - run: terraform plan -input=false -out=tfplan
+      # credentials here: a READ-ONLY role for prod
+
+  apply:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: envs/prod } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v4
+      - run: terraform init -input=false
+      - run: terraform plan -input=false -out=tfplan
+      - run: terraform apply -input=false tfplan
+      # credentials here: the WRITE role for prod, main branch only</div>
+        <p>The apply job plans again from the merged code and applies that exact saved plan. Two details carry the safety: the roles differ between the jobs, and <code>apply tfplan</code> applies a file, so it cannot quietly pick up a different change than the plan it just printed. Pinning action versions you have checked, and posting the plan text as a pull-request comment, are the usual next steps.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>Why a saved plan goes stale<span class="mini">2 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>A saved plan records the state it was computed against. If anything writes that state before the plan is applied, another merge or a teammate's apply, Terraform refuses to apply the old plan. The build-along produces this for real. It is the property that makes "plan, review, apply the reviewed plan" safe to run with more than one person merging.</p>
+        <div class="prompt-box good"><span class="label">★ Real run · a stale saved plan</span>$ terraform apply prod.tfplan
+
+Error: Saved plan is stale
+
+The given plan file can no longer be applied because the state was changed by
+another operation after the plan was created.</div>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>When the pipeline fails: verbose logs<span class="mini">2 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>The Associate exam's objective 7c asks when and how to use verbose logging. Setting the <code>TF_LOG</code> environment variable to a level such as <code>DEBUG</code> makes Terraform write timestamped internal logs to standard error. On the build-along folder, a plain <code>terraform validate</code> printed 2 lines; with <code>TF_LOG=DEBUG</code> it printed 50, starting like this:</p>
+        <div class="prompt-box good"><span class="label">★ Real run · TF_LOG=DEBUG (first 3 lines)</span>$ TF_LOG=DEBUG terraform validate 2&gt;&amp;1 | head -3
+2026-11-03T12:35:48.449+0800 [INFO]  Terraform version: 1.17.1
+2026-11-03T12:35:48.449+0800 [DEBUG] using github.com/hashicorp/go-tfe v1.112.0
+2026-11-03T12:35:48.449+0800 [DEBUG] using github.com/hashicorp/hcl/v2 v2.24.0</div>
+        <p>Use it to diagnose a provider or backend error, then turn it off: debug logs are long, and they can include details of your configuration that do not belong in a shared CI log.</p>
+      </div>
+    </details>
+  </section>
+
+  <section class="section" id="part-3">
+    <div class="section-kicker">
+      <span class="klabel">Part 3 · covers HCP Terraform, OpenTofu and the licence split</span>
+      <h2>Where Terraform runs, and which Terraform</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">Since 2023 a data team choosing infrastructure-as-code tooling makes two decisions where there used to be one. Where do runs happen: on your own pipelines, or on HCP Terraform, HashiCorp's hosted service? And which engine: Terraform, now under the Business Source License and owned by IBM, or OpenTofu, the open-source fork. The facts below were read at source on 3 November 2026; this area moves, so check them again before relying on them.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A timeline of six dated events. 10 August 2023: HashiCorp announces the move from MPL 2.0 to BSL 1.1. 20 September 2023: the Linux Foundation forms OpenTofu. 10 January 2024: OpenTofu 1.6.0, the first stable release. 22 April 2024: Terraform Cloud becomes HCP Terraform. 27 February 2025: IBM completes its acquisition of HashiCorp. 23 April 2025: OpenTofu accepted as a CNCF Sandbox project.">
+        <defs>
+          <filter id="w6cSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="71" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+        </defs>
+        <style>
+          .w6cH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w6cL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w6cS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w6cA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w6cB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w6cN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w6cH" x="30" y="26">THE SPLIT, IN SIX DATES (ALL READ AT SOURCE)</text>
+
+        <g filter="url(#w6cSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M50 120 L840 120"/>
+          <circle cx="90" cy="120" r="9" fill="#F4EEFB" stroke="#7B42BC"/>
+          <circle cx="232" cy="120" r="9" fill="#E3F3F1" stroke="#0F766E"/>
+          <circle cx="374" cy="120" r="9" fill="#E3F3F1" stroke="#0F766E"/>
+          <circle cx="516" cy="120" r="9" fill="#F4EEFB" stroke="#7B42BC"/>
+          <circle cx="658" cy="120" r="9" fill="#F4EEFB" stroke="#7B42BC"/>
+          <circle cx="800" cy="120" r="9" fill="#E3F3F1" stroke="#0F766E"/>
+        </g>
+
+        <text class="w6cA" x="90" y="96" text-anchor="middle">2023-08-10</text>
+        <text class="w6cL" x="90" y="152" text-anchor="middle">BSL 1.1</text>
+        <text class="w6cS" x="90" y="168" text-anchor="middle">announced; from</text>
+        <text class="w6cS" x="90" y="184" text-anchor="middle">Terraform 1.6.0</text>
+        <text class="w6cA" x="232" y="96" text-anchor="middle">2023-09-20</text>
+        <text class="w6cL" x="232" y="152" text-anchor="middle">OpenTofu</text>
+        <text class="w6cS" x="232" y="168" text-anchor="middle">formed by the</text>
+        <text class="w6cS" x="232" y="184" text-anchor="middle">Linux Foundation</text>
+        <text class="w6cA" x="374" y="96" text-anchor="middle">2024-01-10</text>
+        <text class="w6cL" x="374" y="152" text-anchor="middle">OpenTofu 1.6.0</text>
+        <text class="w6cS" x="374" y="168" text-anchor="middle">first stable,</text>
+        <text class="w6cS" x="374" y="184" text-anchor="middle">MPL 2.0</text>
+        <text class="w6cA" x="516" y="96" text-anchor="middle">2024-04-22</text>
+        <text class="w6cL" x="516" y="152" text-anchor="middle">HCP Terraform</text>
+        <text class="w6cS" x="516" y="168" text-anchor="middle">was Terraform</text>
+        <text class="w6cS" x="516" y="184" text-anchor="middle">Cloud</text>
+        <text class="w6cA" x="658" y="96" text-anchor="middle">2025-02-27</text>
+        <text class="w6cL" x="658" y="152" text-anchor="middle">IBM completes</text>
+        <text class="w6cS" x="658" y="168" text-anchor="middle">HashiCorp</text>
+        <text class="w6cS" x="658" y="184" text-anchor="middle">acquisition</text>
+        <text class="w6cA" x="800" y="96" text-anchor="middle">2025-04-23</text>
+        <text class="w6cL" x="800" y="152" text-anchor="middle">OpenTofu joins</text>
+        <text class="w6cS" x="800" y="168" text-anchor="middle">CNCF Sandbox</text>
+        <text class="w6cB" x="800" y="184" text-anchor="middle">still LF-hosted</text>
+
+        <text class="w6cN" x="30" y="236">Purple: HashiCorp and IBM events. Teal: OpenTofu events. Terraform 1.5.7 is the last MPL 2.0 release.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - "OpenTofu is a Linux Foundation project" and "OpenTofu is in the CNCF" are both true; they happened in that order</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>What BSL 1.1 means for a data team<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>On 10 August 2023 HashiCorp announced it was moving future releases from the Mozilla Public License v2.0 to the Business Source License 1.1. Terraform's LICENSE file names the boundary: version 1.6.0 and later. Version 1.5.7 is the last release under MPL 2.0. The licensor named in that file is now IBM.</p>
+        <p>For a data team using Terraform to manage its own platform, HashiCorp's announcement says end users can continue to copy, modify and redistribute the code. The restriction sits in the licence's Additional Use Grant: you may not offer the licensed work to third parties on a hosted or embedded basis to compete with IBM's paid versions. Each version converts to MPL 2.0 four years after it is published. Where the line falls for a consultancy or a platform vendor is a question for a lawyer, not a course page; HashiCorp's licence FAQ could not be read at source for this page, so it is not quoted here.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>HCP Terraform, self-run, or OpenTofu<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <table class="clean">
+          <tr><th>Option</th><th>What you get</th><th>What to check</th></tr>
+          <tr><td><strong>HCP Terraform</strong></td><td>Hosted runs, state, team permissions, policy checks with Sentinel or OPA, workspaces and projects</td><td>Billing is per managed resource; the free tier introduced in 2023 covers up to 500 managed resources, and the legacy free plan ended on 31 March 2026. Current paid prices were not verified here: read the pricing page yourself</td></tr>
+          <tr><td><strong>Self-run Terraform</strong></td><td>Your own pipelines (Part 2), your own backend and locking (session 3), BSL 1.1 licence</td><td>You own the state bucket, the roles, the policy tooling and the upgrades</td></tr>
+          <tr><td><strong>OpenTofu</strong></td><td>MPL 2.0, Linux Foundation and CNCF Sandbox; a drop-in replacement at 1.6.0; since then its own features such as state encryption (1.7), variables in module sources and backend config (1.8), provider for_each and <code>-exclude</code> (1.9)</td><td>Newer Terraform features may not exist in OpenTofu and the reverse; test your modules on the engine you choose, and do not mix the two on one state</td></tr>
+        </table>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>The Associate (004) exam, mapped to these six sessions<span class="mini">4 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>HashiCorp's current exam is Terraform Associate (004): one hour, multiple choice, online proctored, testing Terraform 1.12, $70.50 USD plus local taxes, valid for two years. It replaced 003 in January 2026 (reported; the dates are no longer on the live page). The official page does not give a question count, so none is given here. Its 37 objectives fall into eight groups:</p>
+        <table class="clean">
+          <tr><th>Group</th><th>Objectives</th><th>Sessions</th></tr>
+          <tr><td>1 Infrastructure as Code</td><td>1a-1c</td><td>1, 4</td></tr>
+          <tr><td>2 Terraform fundamentals</td><td>2a-2d</td><td>1, 3, 4 (provider aliases not taught)</td></tr>
+          <tr><td>3 Core workflow</td><td>3a-3g</td><td>1, 2, 5, 6</td></tr>
+          <tr><td>4 Configuration</td><td>4a-4h</td><td>2, 3, 5 (Vault named only)</td></tr>
+          <tr><td>5 Modules</td><td>5a-5d</td><td>4</td></tr>
+          <tr><td>6 State management</td><td>6a-6d</td><td>3</td></tr>
+          <tr><td>7 Maintain infrastructure</td><td>7a-7c</td><td>3, 6</td></tr>
+          <tr><td>8 HCP Terraform</td><td>8a-8d</td><td>5, 6, as concepts only: no account is used</td></tr>
+        </table>
+        <p>Group 8 is the honest gap: it asks you to use HCP Terraform, which needs an account. HashiCorp's free tier and its tutorials are the place to practise it before the exam.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>The procurement question.</strong> After August 2023 many platform teams were asked by legal or procurement whether the licence change affected them. For a team running Terraform on its own infrastructure, the answer in HashiCorp's own announcement was that end users can keep using it; the teams that had to look harder were those embedding or hosting Terraform as part of a product they sell. Some teams moved to OpenTofu for the open licence and governance, some stayed for HCP Terraform's features; both are reasonable, and the choice is about the team's situation, not about one being correct.</p>
+    </div>
+  </section>
+
+  <section class="section" id="demo-1">
+    <div class="section-kicker">
+      <span class="klabel">Build-along</span>
+      <h2>The gate, rehearsed on your laptop</h2>
+      <span class="tag demo">★ 22 min · everyone builds</span>
+    </div>
+    <p class="lede">A pipeline is only the same commands run by a machine, so you can rehearse every one locally. Make a fresh folder with the config below; it uses <code>terraform.workspace</code> so you can see what workspaces do before deciding not to rely on them for prod. Every output was really run with Terraform 1.17.1; your ids will differ.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The build-along as a row of gates: fmt check exits 3 until formatted, validate succeeds, workspace dev and prod get separate state files under terraform.tfstate.d, plan -out saves dev.tfplan, apply dev.tfplan applies exactly that file, and a prod plan applied after someone else changed prod is refused as stale.">
+        <defs>
+          <filter id="w6dSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="73" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <marker id="w6dAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w6dH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w6dL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w6dS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w6dB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w6dR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w6dN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w6dH" x="30" y="26">SIX COMMANDS, EACH ONE A GATE A PIPELINE WILL RUN</text>
+
+        <g filter="url(#w6dSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="56" width="124" height="96" rx="10" transform="rotate(-1 92 104)" fill="#FFFFFF"/>
+          <rect x="172" y="56" width="124" height="96" rx="10" transform="rotate(1 234 104)" fill="#FFFFFF"/>
+          <rect x="314" y="56" width="124" height="96" rx="10" transform="rotate(-0.8 376 104)" fill="#F4EEFB"/>
+          <rect x="456" y="56" width="124" height="96" rx="10" transform="rotate(0.8 518 104)" fill="#FFFFFF"/>
+          <rect x="598" y="56" width="124" height="96" rx="10" transform="rotate(-0.6 660 104)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="740" y="56" width="110" height="96" rx="10" transform="rotate(0.9 795 104)" fill="#FEF2F2" stroke="#991B1B"/>
+          <path d="M156 104 L168 104" marker-end="url(#w6dAr)"/>
+          <path d="M298 104 L310 104" marker-end="url(#w6dAr)"/>
+          <path d="M440 104 L452 104" marker-end="url(#w6dAr)"/>
+          <path d="M582 104 L594 104" marker-end="url(#w6dAr)"/>
+          <path d="M724 104 L736 104" marker-end="url(#w6dAr)"/>
+        </g>
+
+        <text class="w6dL" x="92" y="84" text-anchor="middle">fmt -check</text>
+        <text class="w6dR" x="92" y="106" text-anchor="middle">exit 3</text>
+        <text class="w6dS" x="92" y="124" text-anchor="middle">until formatted</text>
+        <text class="w6dL" x="234" y="84" text-anchor="middle">validate</text>
+        <text class="w6dB" x="234" y="106" text-anchor="middle">Success!</text>
+        <text class="w6dS" x="234" y="124" text-anchor="middle">syntax and types</text>
+        <text class="w6dL" x="376" y="84" text-anchor="middle">workspace</text>
+        <text class="w6dS" x="376" y="106" text-anchor="middle">dev and prod</text>
+        <text class="w6dS" x="376" y="124" text-anchor="middle">tfstate.d/dev, prod</text>
+        <text class="w6dL" x="518" y="84" text-anchor="middle">plan -out</text>
+        <text class="w6dS" x="518" y="106" text-anchor="middle">dev.tfplan</text>
+        <text class="w6dS" x="518" y="124" text-anchor="middle">3 to add</text>
+        <text class="w6dL" x="660" y="84" text-anchor="middle">apply file</text>
+        <text class="w6dB" x="660" y="106" text-anchor="middle">exactly that plan</text>
+        <text class="w6dS" x="660" y="124" text-anchor="middle">3 added</text>
+        <text class="w6dL" x="795" y="84" text-anchor="middle">stale plan</text>
+        <text class="w6dR" x="795" y="106" text-anchor="middle">refused</text>
+        <text class="w6dS" x="795" y="124" text-anchor="middle">plan again</text>
+
+        <text class="w6dN" x="30" y="186">The first two run on every pull request. The last two are what the apply job does after merge.</text>
+        <text class="w6dN" x="30" y="206">The workspace step shows the mechanism; for prod, use a separate directory and backend (Part 1).</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - each command fails loudly when something is wrong, which is exactly what makes it useful in a pipeline</figcaption>
+    </figure>
+
+    <div class="steps">
+      <div class="step">
+        <p><strong>Write a deliberately untidy config.</strong> Save as <code>main.tf</code>, keeping the uneven spacing; step 2 is about catching it. Run <code>terraform init</code> once.</p>
+        <div class="prompt-box good"><span class="label">★ Step 1 · main.tf</span>terraform {
+  required_providers {
+    local = { source = "hashicorp/local", version = "~&gt; 2.5" }
+  }
+}
+resource "local_file" "zone" {
+  for_each = toset(["raw","curated","serving"])
+  filename = "${path.module}/lake/larkspur-${terraform.workspace}-${each.key}/ZONE.txt"
+  content = "zone=${each.key} env=${terraform.workspace}\n"
+}</div>
+      </div>
+      <div class="step">
+        <p><strong>The formatting gate.</strong> <code>fmt -check</code> changes nothing; it lists unformatted files and exits non-zero, which fails a pipeline step. <code>-diff</code> shows what it would change. Then fix it and check again.</p>
+        <div class="prompt-box good"><span class="label">★ Step 2 · terraform fmt</span>$ terraform fmt -check -diff
+main.tf
+--- old/main.tf
++++ new/main.tf
+@@ -4,7 +4,7 @@
+   }
+ }
+ resource "local_file" "zone" {
+-  for_each = toset(["raw","curated","serving"])
++  for_each = toset(["raw", "curated", "serving"])
+   filename = "${path.module}/lake/larkspur-${terraform.workspace}-${each.key}/ZONE.txt"
+-  content = "zone=${each.key} env=${terraform.workspace}\n"
++  content  = "zone=${each.key} env=${terraform.workspace}\n"
+ }
+[exit 3]
+
+$ terraform fmt
+main.tf
+$ terraform fmt -check
+[exit 0]</div>
+      </div>
+      <div class="step">
+        <p><strong>The validation gate.</strong> validate checks syntax, references and types without touching state or providers' real objects.</p>
+        <div class="prompt-box good"><span class="label">★ Step 3 · terraform validate</span>$ terraform validate
+Success! The configuration is valid.</div>
+      </div>
+      <div class="step">
+        <p><strong>See what workspaces are.</strong> Two workspaces, two states, one directory and one backend. Note that <code>workspace new</code> also switches you to the new one, which is exactly the trap Part 1 describes.</p>
+        <div class="prompt-box good"><span class="label">★ Step 4 · workspaces</span>$ terraform workspace new dev
+Created and switched to workspace "dev"!
+
+$ terraform workspace new prod
+Created and switched to workspace "prod"!
+
+$ terraform workspace list
+  default
+  dev
+* prod
+
+$ terraform workspace select dev
+Switched to workspace "dev".</div>
+      </div>
+      <div class="step">
+        <p><strong>Plan to a file, apply the file.</strong> This is the apply job's pattern: the plan is saved, and apply runs that exact plan instead of computing a new one.</p>
+        <div class="prompt-box good"><span class="label">★ Step 5 · saved plan (trimmed)</span>$ terraform plan -out=dev.tfplan
+...
+Plan: 3 to add, 0 to change, 0 to destroy.
+...
+Saved the plan to: dev.tfplan
+...
+    terraform apply "dev.tfplan"
+
+$ terraform apply dev.tfplan
+local_file.zone["raw"]: Creation complete after 0s [id=2d18145fe7adc7af527ec22fec11794e1716e524]
+local_file.zone["serving"]: Creation complete after 0s [id=6bd6387a15ae8f03b6f60d561a6d5bd2f4f73559]
+local_file.zone["curated"]: Creation complete after 0s [id=1901e695492251a098080c221d12e05213c0a83b]
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+
+$ ls lake
+larkspur-dev-curated
+larkspur-dev-raw
+larkspur-dev-serving
+$ ls terraform.tfstate.d
+dev
+prod</div>
+      </div>
+      <div class="step">
+        <p><strong>Make a plan go stale.</strong> Select prod and save a plan. Then, standing in for a teammate's merge, apply prod directly. Now try to apply your saved plan: Terraform refuses, because the state it was computed against no longer exists.</p>
+        <div class="prompt-box good"><span class="label">★ Step 6 · the stale plan (trimmed)</span>$ terraform workspace select prod
+Switched to workspace "prod".
+$ terraform plan -out=prod.tfplan
+...
+Plan: 3 to add, 0 to change, 0 to destroy.
+Saved the plan to: prod.tfplan
+
+# meanwhile, someone else applies prod first
+$ terraform apply -auto-approve
+...
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+
+$ terraform apply prod.tfplan
+
+Error: Saved plan is stale
+
+The given plan file can no longer be applied because the state was changed by
+another operation after the plan was created.</div>
+      </div>
+      <div class="step">
+        <p><strong>Write the workflow file you would commit.</strong> Copy the YAML from Part 2 into <code>.github/workflows/</code> of a practice repository and change the paths to your layout. Leave it unrun until you have a remote backend and two roles; the point today is to read every step and know which command above it runs.</p>
+        <div class="prompt-box good"><span class="label">★ Step 7 · what each job runs</span>pull_request  -&gt;  fmt -check, init, validate, plan -out   (read-only role)
+merge to main -&gt;  init, plan -out=tfplan, apply tfplan     (write role)
+stale plan    -&gt;  the job fails; re-run it to plan again</div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <p><strong>Clean up.</strong> Run <code>terraform destroy -auto-approve</code> in each workspace, then <code>terraform workspace select default</code> and <code>terraform workspace delete dev</code> and <code>prod</code>. Everything here was local files, so nothing outside the folder was touched.</p>
+    </div>
+  </section>
+
+  <section class="section" id="exercise">
+    <div class="section-kicker">
+      <span class="klabel">Homework</span>
+      <h2>To finish the six sessions</h2>
+      <span class="tag exercise">45 min</span>
+    </div>
+    <ol>
+      <li><strong>Redo the layout as directories.</strong> Turn the build-along into <code>envs/dev</code> and <code>envs/prod</code>, each calling session 4's data-zone module with its own <code>backend "local"</code> path. Run both; confirm each has its own state file.</li>
+      <li><strong>Write your team's gate in one page.</strong> Which checks run on a pull request, who must approve, which role applies, and what happens to a stale plan. Add the one policy from session 5's homework.</li>
+      <li><strong>Make the platform call.</strong> For your team, write three sentences each for HCP Terraform, self-run Terraform and OpenTofu, ending with the option you would choose and the fact that decided it.</li>
+      <li><strong>Plan for the exam, if you want it.</strong> Mark each of the 37 objectives in the table above as "confident", "shaky" or "not yet", and practise group 8 with an HCP Terraform free account.</li>
+    </ol>
+  </section>
+
+  <section class="section" id="quiz">
+    <div class="section-kicker">
+      <span class="klabel">Check yourself</span>
+      <h2>Three questions</h2>
+    </div>
+    <p>Clear all three and session 6 gets stamped in your passport.</p>
+
+    <div class="quiz-q" data-answer="2">
+      <p class="qtext">1 · Larkspur wants dev and prod managed from one repository. Which layout keeps a dev mistake from reaching the prod lake?</p>
+      <button class="qopt" type="button">A · One directory with CLI workspaces dev and prod, since each workspace has its own state</button>
+      <button class="qopt" type="button">B · One directory and one state, with a variable for the environment</button>
+      <button class="qopt" type="button">C · A directory per environment, each with its own backend and its own role, calling the same module</button>
+      <button class="qopt" type="button">D · Two copies of every resource block in one file, one per environment</button>
+      <p class="qwhy">Workspaces do separate state, but they share a backend and usually the same credentials, so the selected workspace is the only fence; HashiCorp says they alone are not suitable for system decomposition. Separate directories separate state, backend and permissions while still sharing the module code.</p>
+    </div>
+
+    <div class="quiz-q" data-answer="0">
+      <p class="qtext">2 · A pipeline saved a plan for prod, then another merge applied first. What happens when the pipeline runs <code>terraform apply</code> on its saved plan?</p>
+      <button class="qopt" type="button">A · Terraform refuses: "Saved plan is stale", because the state changed after the plan was created; the job must plan again</button>
+      <button class="qopt" type="button">B · It applies the old plan anyway, undoing the other merge</button>
+      <button class="qopt" type="button">C · It merges the two plans automatically</button>
+      <button class="qopt" type="button">D · It silently re-plans and applies whatever the new plan says</button>
+      <p class="qwhy">A saved plan is tied to the state it was computed from. Refusing a stale plan is what makes "apply exactly the reviewed plan" safe when several people merge. D would break that promise, because the applied change would differ from what anyone read.</p>
+    </div>
+
+    <div class="quiz-q" data-answer="3">
+      <p class="qtext">3 · Which statement about Terraform's licence and OpenTofu is accurate?</p>
+      <button class="qopt" type="button">A · Terraform moved to BSL 1.1 starting with version 1.5, and OpenTofu is a CNCF Graduated project</button>
+      <button class="qopt" type="button">B · BSL 1.1 forbids any company from using Terraform to manage its own infrastructure</button>
+      <button class="qopt" type="button">C · OpenTofu is a Linux Foundation project and therefore cannot be part of the CNCF</button>
+      <button class="qopt" type="button">D · BSL applies from Terraform 1.6.0, 1.5.7 is the last MPL 2.0 release, and OpenTofu, formed under the Linux Foundation, joined the CNCF Sandbox in April 2025</button>
+      <p class="qwhy">The LICENSE file draws the line at 1.6.0. HashiCorp's announcement said end users can continue to use and modify the code; the restriction targets hosted or embedded competing offerings. OpenTofu is both LF-formed and, since 23 April 2025, a CNCF Sandbox project, not Graduated.</p>
+    </div>
+
+    <p class="quiz-score"></p>
+  </section>
+
+  <section class="section" id="official">
+    <div class="section-kicker">
+      <span class="klabel">Sources covered</span>
+      <h2>What this session teaches, and where it came from</h2>
+    </div>
+    <div class="covered">
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform Associate (004) exam page and content list</span><span class="note">Format, version tested, price, validity and the 37 objectives read at developer.hashicorp.com; the January 2026 switch from 003 is reported; no question count published</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform docs: CLI workspaces, plan, apply</span><span class="note">Workspaces share a backend and are not suitable alone for system decomposition; saved plans; objectives 3c, 3g, 7c</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">HashiCorp BSL announcement and Terraform LICENSE files</span><span class="note">2023-08-10 announcement, BSL from 1.6.0, MPL at 1.5.7, Additional Use Grant, four-year change date, IBM as licensor; the licence FAQ could not be read and is not quoted</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">OpenTofu, Linux Foundation and CNCF pages</span><span class="note">Manifesto, LF formation 2023-09-20, 1.6.0 GA 2024-01-10, MPL 2.0, CNCF Sandbox 2025-04-23, features in 1.7 to 1.9</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">IBM newsroom and HCP Terraform docs and blog</span><span class="note">Acquisition announced 2024-04-24 and completed 2025-02-27; rename effective 2024-04-22; free tier to 500 managed resources; legacy free plan end of life 2026-03-31; Sentinel and OPA</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform 1.17.1, real runs</span><span class="note">fmt, validate, workspaces, saved plan, stale plan and TF_LOG outputs on this page; the GitHub Actions YAML is shown, not run (setup-terraform v4, setup-opentofu v2 read at source)</span></div>
+      <div class="covered-row"><span class="status pill light">◐</span><span class="name">Larkspur Freight and Priya</span><span class="note">Constructed for teaching</span></div>
+    </div>
+    <p class="mono" style="margin-top:14px">Every fact on this page, and its verification tier, is recorded in the course's source map.</p>
+  </section>
+
+  <section class="cheat" id="cheatsheet">
+    <h3>Session 6 cheat sheet <span>· pin this</span></h3>
+    <div class="grid-2">
+      <div class="cheat-item"><b>Layout</b><span>A directory, backend and role per environment, one shared module. Workspaces are not the fence.</span></div>
+      <div class="cheat-item"><b>On a pull request</b><span><code>fmt -check</code>, <code>validate</code>, <code>plan -out</code> with a read-only role; post the plan; a person approves.</span></div>
+      <div class="cheat-item"><b>On merge</b><span><code>plan -out=tfplan</code> then <code>apply tfplan</code> with the write role, from main only.</span></div>
+      <div class="cheat-item"><b>Stale plan</b><span>State changed since the plan: Terraform refuses. Plan again; never force it.</span></div>
+      <div class="cheat-item"><b>Licence</b><span>BSL 1.1 from Terraform 1.6.0; 1.5.7 last MPL. OpenTofu: MPL 2.0, LF, CNCF Sandbox.</span></div>
+      <div class="cheat-item"><b>Debug</b><span><code>TF_LOG=DEBUG</code> for verbose logs; turn it off before sharing CI logs.</span></div>
+    </div>
+  </section>
+
+  <div class="callout next">
+    <span class="nx-pill">Where next</span>
+    <p>Larkspur's platform is now code, reviewed before it changes and rebuilt the same way every time. To go deeper on the services you provisioned, <a href="https://phoebefu6.github.io/learn-aws-with-phoebe/">AWS</a>, <a href="https://phoebefu6.github.io/learn-databricks-with-phoebe/">Databricks</a> and <a href="https://phoebefu6.github.io/learn-data-warehouse-with-phoebe/">Data Warehouse</a> cover them. For the same gate applied to pipelines and models rather than infrastructure, <a href="https://phoebefu6.github.io/learn-dataops-with-phoebe/">DataOps</a> is next door, and for designing the roles your runner uses, <a href="https://phoebefu6.github.io/learn-data-access-control-with-phoebe/">Data Access Control</a>. The whole library is at the <a href="https://phoebefu6.github.io/learn-with-phoebe/">Learn with Phoebe hub</a>.</p>
+  </div>
+
+  <footer class="pagefoot">
+    <span>Session 6 of 6 · learn-terraform-with-phoebe · by Phoebe Fu &nbsp;·&nbsp; 📚 <a href="https://phoebefu6.github.io/learn-with-phoebe/">Learn with Phoebe ↗</a></span>
+    <span><a href="05-read-a-plan-like-a-reviewer.html">← Prev: Read a plan like a reviewer</a> &nbsp;·&nbsp; <a href="../index.html">Course home</a></span>
+  </footer>
+
+</main>
+
+<script src="../assets/app.js?v=1"></script>
+</body>
+</html>

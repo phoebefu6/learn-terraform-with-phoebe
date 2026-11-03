@@ -1,0 +1,56 @@
+$ terraform fmt -check -diff
+main.tf
+--- old/main.tf
++++ new/main.tf
+@@ -4,7 +4,7 @@
+   }
+ }
+ resource "local_file" "zone" {
+-  for_each = toset(["raw","curated","serving"])
++  for_each = toset(["raw", "curated", "serving"])
+   filename = "${path.module}/lake/larkspur-${terraform.workspace}-${each.key}/ZONE.txt"
+-  content = "zone=${each.key} env=${terraform.workspace}\n"
++  content  = "zone=${each.key} env=${terraform.workspace}\n"
+ }
+[exit 3]
+# fix it
+$ terraform fmt
+main.tf
+[exit 0]
+$ terraform fmt -check
+[exit 0]
+$ terraform validate
+Success! The configuration is valid.
+
+[exit 0]
+$ terraform workspace new dev
+Created and switched to workspace "dev"!
+
+$ terraform workspace new prod
+Created and switched to workspace "prod"!
+
+$ terraform workspace list
+  default
+  dev
+* prod
+
+[exit 0]
+$ terraform workspace select dev
+Switched to workspace "dev".
+[exit 0]
+$ terraform plan -out=dev.tfplan
+Plan: 3 to add, 0 to change, 0 to destroy.
+Saved the plan to: dev.tfplan
+    terraform apply "dev.tfplan"
+[exit 0]
+$ terraform apply dev.tfplan
+local_file.zone["raw"]: Creation complete after 0s [id=2d18145fe7adc7af527ec22fec11794e1716e524]
+local_file.zone["serving"]: Creation complete after 0s [id=6bd6387a15ae8f03b6f60d561a6d5bd2f4f73559]
+local_file.zone["curated"]: Creation complete after 0s [id=1901e695492251a098080c221d12e05213c0a83b]
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+[exit 0]
+larkspur-dev-curated
+larkspur-dev-raw
+larkspur-dev-serving
+dev
+prod

@@ -1,0 +1,8 @@
+$ TF_LOG=DEBUG terraform validate 2>&1 | head -3
+2026-11-03T12:35:48.449+0800 [INFO]  Terraform version: 1.17.1
+2026-11-03T12:35:48.449+0800 [DEBUG] using github.com/hashicorp/go-tfe v1.112.0
+2026-11-03T12:35:48.449+0800 [DEBUG] using github.com/hashicorp/hcl/v2 v2.24.0
+$ TF_LOG=DEBUG terraform validate 2>&1 | wc -l
+      50
+$ terraform validate 2>&1 | wc -l
+       2

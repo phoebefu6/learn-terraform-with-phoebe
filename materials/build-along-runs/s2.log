@@ -1,0 +1,243 @@
+$ terraform validate
+Success! The configuration is valid.
+
+[exit 0]
+$ terraform plan -var env=staging
+
+Changes to Outputs:
+  + warehouse_password = (sensitive value)
+
+You can apply this plan to save these new output values to the Terraform
+state, without changing any real infrastructure.
+
+Error: Invalid value for variable
+
+  on main.tf line 7:
+   7: variable "env" {
+    ├────────────────
+    │ var.env is "staging"
+
+env must be dev or prod.
+
+This was checked by the validation rule at main.tf:11,3-13.
+[exit 1]
+$ terraform apply -auto-approve
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+ <= read (data resources)
+
+Terraform will perform the following actions:
+
+  # data.local_file.raw_marker will be read during apply
+  # (depends on a resource or a module with changes pending)
+ <= data "local_file" "raw_marker" {
+      + content              = (known after apply)
+      + content_base64       = (known after apply)
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + filename             = "./lake/larkspur-dev-raw/ZONE.txt"
+      + id                   = (known after apply)
+    }
+
+  # local_file.zone["curated"] will be created
+  + resource "local_file" "zone" {
+      + content              = <<-EOT
+            zone=curated env=dev retention_days=365
+        EOT
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + directory_permission = "0777"
+      + file_permission      = "0777"
+      + filename             = "./lake/larkspur-dev-curated/ZONE.txt"
+      + id                   = (known after apply)
+    }
+
+  # local_file.zone["raw"] will be created
+  + resource "local_file" "zone" {
+      + content              = <<-EOT
+            zone=raw env=dev retention_days=30
+        EOT
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + directory_permission = "0777"
+      + file_permission      = "0777"
+      + filename             = "./lake/larkspur-dev-raw/ZONE.txt"
+      + id                   = (known after apply)
+    }
+
+  # local_file.zone["serving"] will be created
+  + resource "local_file" "zone" {
+      + content              = <<-EOT
+            zone=serving env=dev retention_days=90
+        EOT
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + directory_permission = "0777"
+      + file_permission      = "0777"
+      + filename             = "./lake/larkspur-dev-serving/ZONE.txt"
+      + id                   = (known after apply)
+    }
+
+Plan: 3 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + raw_marker_text    = (known after apply)
+  + warehouse_password = (sensitive value)
+  + zone_paths         = {
+      + curated = "./lake/larkspur-dev-curated/ZONE.txt"
+      + raw     = "./lake/larkspur-dev-raw/ZONE.txt"
+      + serving = "./lake/larkspur-dev-serving/ZONE.txt"
+    }
+local_file.zone["raw"]: Creating...
+local_file.zone["curated"]: Creating...
+local_file.zone["serving"]: Creating...
+local_file.zone["raw"]: Creation complete after 0s [id=5c759187767bc174c5c0ac31b150de23b3fb99d1]
+local_file.zone["curated"]: Creation complete after 0s [id=3edcd67f52e40eaf609713752ee4632c230124eb]
+local_file.zone["serving"]: Creation complete after 0s [id=adf707491db8d1257491c8bad80c41f218151274]
+data.local_file.raw_marker: Reading...
+data.local_file.raw_marker: Read complete after 0s [id=5c759187767bc174c5c0ac31b150de23b3fb99d1]
+
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+raw_marker_text = "zone=raw env=dev retention_days=30"
+warehouse_password = <sensitive>
+zone_paths = {
+  "curated" = "./lake/larkspur-dev-curated/ZONE.txt"
+  "raw" = "./lake/larkspur-dev-raw/ZONE.txt"
+  "serving" = "./lake/larkspur-dev-serving/ZONE.txt"
+}
+[exit 0]
+$ terraform output
+raw_marker_text = "zone=raw env=dev retention_days=30"
+warehouse_password = <sensitive>
+zone_paths = {
+  "curated" = "./lake/larkspur-dev-curated/ZONE.txt"
+  "raw" = "./lake/larkspur-dev-raw/ZONE.txt"
+  "serving" = "./lake/larkspur-dev-serving/ZONE.txt"
+}
+[exit 0]
+larkspur-dev-curated
+larkspur-dev-raw
+larkspur-dev-serving
+
+lake/larkspur-dev-curated:
+ZONE.txt
+
+lake/larkspur-dev-raw:
+ZONE.txt
+
+lake/larkspur-dev-serving:
+ZONE.txt
+$ terraform plan -var env=prod
+local_file.zone["curated"]: Refreshing state... [id=3edcd67f52e40eaf609713752ee4632c230124eb]
+local_file.zone["serving"]: Refreshing state... [id=adf707491db8d1257491c8bad80c41f218151274]
+local_file.zone["raw"]: Refreshing state... [id=5c759187767bc174c5c0ac31b150de23b3fb99d1]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+-/+ destroy and then create replacement
+ <= read (data resources)
+
+Terraform will perform the following actions:
+
+  # data.local_file.raw_marker will be read during apply
+  # (depends on a resource or a module with changes pending)
+ <= data "local_file" "raw_marker" {
+      + content              = (known after apply)
+      + content_base64       = (known after apply)
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + filename             = "./lake/larkspur-prod-raw/ZONE.txt"
+      + id                   = (known after apply)
+    }
+
+  # local_file.zone["curated"] must be replaced
+-/+ resource "local_file" "zone" {
+      ~ content              = <<-EOT # forces replacement
+          - zone=curated env=dev retention_days=365
+          + zone=curated env=prod retention_days=365
+        EOT
+      ~ content_base64sha256 = "xYPdfGjL4yHQgLQKBijKan3g7BI6uLG+RZ+fR9LIq4k=" -> (known after apply)
+      ~ content_base64sha512 = "ep4dtzoxDdsaxXhCiGYZd84cpz3AhGfeocBOG1bpF9oA3HmCqGBtoYWCC9sRe3nk4XZ6UO/2JeEwVevOKJpMeg==" -> (known after apply)
+      ~ content_md5          = "c08e7753aaced01d4033c0d1d6544a3d" -> (known after apply)
+      ~ content_sha1         = "3edcd67f52e40eaf609713752ee4632c230124eb" -> (known after apply)
+      ~ content_sha256       = "c583dd7c68cbe321d080b40a0628ca6a7de0ec123ab8b1be459f9f47d2c8ab89" -> (known after apply)
+      ~ content_sha512       = "7a9e1db73a310ddb1ac5784288661977ce1ca73dc08467dea1c04e1b56e917da00dc7982a8606da185820bdb117b79e4e1767a50eff625e13055ebce289a4c7a" -> (known after apply)
+      ~ filename             = "./lake/larkspur-dev-curated/ZONE.txt" -> "./lake/larkspur-prod-curated/ZONE.txt" # forces replacement
+      ~ id                   = "3edcd67f52e40eaf609713752ee4632c230124eb" -> (known after apply)
+        # (2 unchanged attributes hidden)
+    }
+
+  # local_file.zone["raw"] must be replaced
+-/+ resource "local_file" "zone" {
+      ~ content              = <<-EOT # forces replacement
+          - zone=raw env=dev retention_days=30
+          + zone=raw env=prod retention_days=30
+        EOT
+      ~ content_base64sha256 = "zq14HAHtn5w4XXd1hS2kPmnKgTXFSeweS5y51XmIlI8=" -> (known after apply)
+      ~ content_base64sha512 = "2Hfc8e/+HEzjiSLQY6zTwY2hTXVW6IohGZrlREpkViaedGyoUKAKw/rG5VG4OlcOWafF3iUXRav67C2dR+rB5Q==" -> (known after apply)
+      ~ content_md5          = "9b2a0372d1feb7074349d510febe0248" -> (known after apply)
+      ~ content_sha1         = "5c759187767bc174c5c0ac31b150de23b3fb99d1" -> (known after apply)
+      ~ content_sha256       = "cead781c01ed9f9c385d7775852da43e69ca8135c549ec1e4b9cb9d57988948f" -> (known after apply)
+      ~ content_sha512       = "d877dcf1effe1c4ce38922d063acd3c18da14d7556e88a21199ae5444a6456269e746ca850a00ac3fac6e551b83a570e59a7c5de251745abfaec2d9d47eac1e5" -> (known after apply)
+      ~ filename             = "./lake/larkspur-dev-raw/ZONE.txt" -> "./lake/larkspur-prod-raw/ZONE.txt" # forces replacement
+      ~ id                   = "5c759187767bc174c5c0ac31b150de23b3fb99d1" -> (known after apply)
+        # (2 unchanged attributes hidden)
+    }
+
+  # local_file.zone["serving"] must be replaced
+-/+ resource "local_file" "zone" {
+      ~ content              = <<-EOT # forces replacement
+          - zone=serving env=dev retention_days=90
+          + zone=serving env=prod retention_days=90
+        EOT
+      ~ content_base64sha256 = "vpscZyCWAUVJhaFV4S3Vp/i9gdF3RD6HIbjSVdwHcdI=" -> (known after apply)
+      ~ content_base64sha512 = "xWlk9HMOQs1L3mBXhGkb386J/f4uXwP/VWWQ/1YWrN3Z4xn4ySH98fEm2jJPb+THjcB+0GrBaLI3LIROzbq7Sw==" -> (known after apply)
+      ~ content_md5          = "7dd29695178ab84554368e7ac371a4fa" -> (known after apply)
+      ~ content_sha1         = "adf707491db8d1257491c8bad80c41f218151274" -> (known after apply)
+      ~ content_sha256       = "be9b1c67209601454985a155e12dd5a7f8bd81d177443e8721b8d255dc0771d2" -> (known after apply)
+      ~ content_sha512       = "c56964f4730e42cd4bde605784691bdfce89fdfe2e5f03ff556590ff5616acddd9e319f8c921fdf1f126da324f6fe4c78dc07ed06ac168b2372c844ecdbabb4b" -> (known after apply)
+      ~ filename             = "./lake/larkspur-dev-serving/ZONE.txt" -> "./lake/larkspur-prod-serving/ZONE.txt" # forces replacement
+      ~ id                   = "adf707491db8d1257491c8bad80c41f218151274" -> (known after apply)
+        # (2 unchanged attributes hidden)
+    }
+
+Plan: 3 to add, 0 to change, 3 to destroy.
+
+Changes to Outputs:
+  ~ raw_marker_text    = "zone=raw env=dev retention_days=30" -> (known after apply)
+  ~ zone_paths         = {
+      ~ curated = "./lake/larkspur-dev-curated/ZONE.txt" -> "./lake/larkspur-prod-curated/ZONE.txt"
+      ~ raw     = "./lake/larkspur-dev-raw/ZONE.txt" -> "./lake/larkspur-prod-raw/ZONE.txt"
+      ~ serving = "./lake/larkspur-dev-serving/ZONE.txt" -> "./lake/larkspur-prod-serving/ZONE.txt"
+    }
+
+─────────────────────────────────────────────────────────────────────────────
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.
+[exit 0]

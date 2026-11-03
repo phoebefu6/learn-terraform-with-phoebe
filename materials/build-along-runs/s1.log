@@ -1,0 +1,233 @@
+$ terraform init
+Initializing the backend...
+
+Initializing provider plugins...
+- Finding hashicorp/random versions matching "~> 3.6"...
+- Finding hashicorp/local versions matching "~> 2.5"...
+- Installing hashicorp/random v3.9.1...
+- Installed hashicorp/random v3.9.1 (signed by HashiCorp)
+- Installing hashicorp/local v2.9.1...
+- Installed hashicorp/local v2.9.1 (signed by HashiCorp)
+
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+
+Terraform has been successfully initialized!
+
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+[exit 0]
+$ terraform plan
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # local_file.readme will be created
+  + resource "local_file" "readme" {
+      + content              = (known after apply)
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + directory_permission = "0777"
+      + file_permission      = "0777"
+      + filename             = "./out/README.txt"
+      + id                   = (known after apply)
+    }
+
+  # random_id.platform will be created
+  + resource "random_id" "platform" {
+      + b64_std     = (known after apply)
+      + b64_url     = (known after apply)
+      + byte_length = 4
+      + dec         = (known after apply)
+      + hex         = (known after apply)
+      + id          = (known after apply)
+    }
+
+Plan: 2 to add, 0 to change, 0 to destroy.
+
+─────────────────────────────────────────────────────────────────────────────
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.
+[exit 0]
+$ terraform apply -auto-approve
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # local_file.readme will be created
+  + resource "local_file" "readme" {
+      + content              = (known after apply)
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + directory_permission = "0777"
+      + file_permission      = "0777"
+      + filename             = "./out/README.txt"
+      + id                   = (known after apply)
+    }
+
+  # random_id.platform will be created
+  + resource "random_id" "platform" {
+      + b64_std     = (known after apply)
+      + b64_url     = (known after apply)
+      + byte_length = 4
+      + dec         = (known after apply)
+      + hex         = (known after apply)
+      + id          = (known after apply)
+    }
+
+Plan: 2 to add, 0 to change, 0 to destroy.
+random_id.platform: Creating...
+random_id.platform: Creation complete after 0s [id=fyQSpw]
+local_file.readme: Creating...
+local_file.readme: Creation complete after 0s [id=7f976794dce28748ccac82819c2640f3f41a2aaf]
+
+Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
+[exit 0]
+Larkspur Freight data platform, build 7f2412a7
+$ terraform plan
+random_id.platform: Refreshing state... [id=fyQSpw]
+local_file.readme: Refreshing state... [id=7f976794dce28748ccac82819c2640f3f41a2aaf]
+
+No changes. Your infrastructure matches the configuration.
+
+Terraform has compared your real infrastructure against your configuration
+and found no differences, so no changes are needed.
+[exit 0]
+$ terraform plan
+random_id.platform: Refreshing state... [id=fyQSpw]
+local_file.readme: Refreshing state... [id=7f976794dce28748ccac82819c2640f3f41a2aaf]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # local_file.readme will be created
+  + resource "local_file" "readme" {
+      + content              = <<-EOT
+            Larkspur Freight data platform, build 7f2412a7
+        EOT
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + directory_permission = "0777"
+      + file_permission      = "0777"
+      + filename             = "./out/README.txt"
+      + id                   = (known after apply)
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+
+─────────────────────────────────────────────────────────────────────────────
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.
+[exit 0]
+$ terraform apply -auto-approve
+random_id.platform: Refreshing state... [id=fyQSpw]
+local_file.readme: Refreshing state... [id=7f976794dce28748ccac82819c2640f3f41a2aaf]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # local_file.readme will be created
+  + resource "local_file" "readme" {
+      + content              = <<-EOT
+            Larkspur Freight data platform, build 7f2412a7
+        EOT
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + directory_permission = "0777"
+      + file_permission      = "0777"
+      + filename             = "./out/README.txt"
+      + id                   = (known after apply)
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+local_file.readme: Creating...
+local_file.readme: Creation complete after 0s [id=7f976794dce28748ccac82819c2640f3f41a2aaf]
+
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+[exit 0]
+$ terraform state list
+local_file.readme
+random_id.platform
+[exit 0]
+$ terraform destroy -auto-approve
+random_id.platform: Refreshing state... [id=fyQSpw]
+local_file.readme: Refreshing state... [id=7f976794dce28748ccac82819c2640f3f41a2aaf]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  - destroy
+
+Terraform will perform the following actions:
+
+  # local_file.readme will be destroyed
+  - resource "local_file" "readme" {
+      - content              = <<-EOT
+            Larkspur Freight data platform, build 7f2412a7
+        EOT -> null
+      - content_base64sha256 = "Z95vKsbHhNmO2TYRxi11wDbCw84bx+6NmCC5eQ6GTPs=" -> null
+      - content_base64sha512 = "ukv5aLNf2TIm35FEfhND6iOOe7tnecXaaBJ1cTgg4JIPzSw3Q4j05/1Y073as8Y4lzf1Y8tJKmoYJ6w69p5gOA==" -> null
+      - content_md5          = "db8099854b69458ebee7b79dcfc0edc3" -> null
+      - content_sha1         = "7f976794dce28748ccac82819c2640f3f41a2aaf" -> null
+      - content_sha256       = "67de6f2ac6c784d98ed93611c62d75c036c2c3ce1bc7ee8d9820b9790e864cfb" -> null
+      - content_sha512       = "ba4bf968b35fd93226df91447e1343ea238e7bbb6779c5da681275713820e0920fcd2c374388f4e7fd58d3bddab3c6389737f563cb492a6a1827ac3af69e6038" -> null
+      - directory_permission = "0777" -> null
+      - file_permission      = "0777" -> null
+      - filename             = "./out/README.txt" -> null
+      - id                   = "7f976794dce28748ccac82819c2640f3f41a2aaf" -> null
+    }
+
+  # random_id.platform will be destroyed
+  - resource "random_id" "platform" {
+      - b64_std     = "fyQSpw==" -> null
+      - b64_url     = "fyQSpw" -> null
+      - byte_length = 4 -> null
+      - dec         = "2133070503" -> null
+      - hex         = "7f2412a7" -> null
+      - id          = "fyQSpw" -> null
+    }
+
+Plan: 0 to add, 0 to change, 2 to destroy.
+local_file.readme: Destroying... [id=7f976794dce28748ccac82819c2640f3f41a2aaf]
+local_file.readme: Destruction complete after 0s
+random_id.platform: Destroying... [id=fyQSpw]
+random_id.platform: Destruction complete after 0s
+
+Destroy complete! Resources: 2 destroyed.
+[exit 0]

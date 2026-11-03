@@ -1,0 +1,45 @@
+$ terraform plan -var zone_list=["raw","serving"]
+terraform_data.by_key["raw"]: Refreshing state... [id=a8977f90-128d-5f81-7052-80fca60a5205]
+terraform_data.by_index[0]: Refreshing state... [id=c08436cb-1c49-32ca-634a-b193921276b4]
+terraform_data.by_index[2]: Refreshing state... [id=20032c85-d892-435f-9652-90b2c73c194d]
+terraform_data.by_key["curated"]: Refreshing state... [id=eab32d47-e737-056e-e738-a11f1c677d0c]
+terraform_data.by_index[1]: Refreshing state... [id=9920dd9e-1c1b-c998-ecf2-97bef8e18a27]
+terraform_data.by_key["serving"]: Refreshing state... [id=2c1090c0-ecf1-8b2b-02da-0093f9120ae7]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  ~ update in-place
+  - destroy
+
+Terraform will perform the following actions:
+
+  # terraform_data.by_index[1] will be updated in-place
+  ~ resource "terraform_data" "by_index" {
+        id     = "9920dd9e-1c1b-c998-ecf2-97bef8e18a27"
+      ~ input  = "curated" -> "serving"
+      ~ output = "curated" -> (known after apply)
+    }
+
+  # terraform_data.by_index[2] will be destroyed
+  # (because index [2] is out of range for count)
+  - resource "terraform_data" "by_index" {
+      - id     = "20032c85-d892-435f-9652-90b2c73c194d" -> null
+      - input  = "serving" -> null
+      - output = "serving" -> null
+    }
+
+  # terraform_data.by_key["curated"] will be destroyed
+  # (because key ["curated"] is not in for_each map)
+  - resource "terraform_data" "by_key" {
+      - id     = "eab32d47-e737-056e-e738-a11f1c677d0c" -> null
+      - input  = "curated" -> null
+      - output = "curated" -> null
+    }
+
+Plan: 0 to add, 1 to change, 2 to destroy.
+
+─────────────────────────────────────────────────────────────────────────────
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.
+[exit 0]

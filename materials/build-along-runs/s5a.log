@@ -1,0 +1,18 @@
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+[exit 0]
+# region changed to eu-central-1
+$ terraform plan
+-/+ destroy and then create replacement
+  # terraform_data.raw_zone must be replaced
+-/+ resource "terraform_data" "raw_zone" {
+      ~ id               = "41e49c6e-347c-dc64-8b9f-dc72ab0585d3" -> (known after apply)
+      ~ input            = {
+          ~ region = "eu-west-1" -> "eu-central-1"
+      ~ output           = {
+          - name   = "larkspur-prod-raw"
+          - region = "eu-west-1"
+          - tags   = "team=data"
+      ~ triggers_replace = [
+          ~ "eu-west-1" -> "eu-central-1",
+Plan: 1 to add, 0 to change, 1 to destroy.
+[exit 0]

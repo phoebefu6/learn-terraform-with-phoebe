@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- social:start -->
+<meta name="description" content="Six sessions on Terraform for data leaders and data engineers: why infrastructure as code, the HCL language, state, modules and versions, reading a plan like a reviewer with a live plan simulator, and shipping changes through a pull request. Local only, no cloud account, every command really run. Free, by Phoebe Fu.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Learn with Phoebe">
+<meta property="og:title" content="Learn Terraform with Phoebe">
+<meta property="og:description" content="A data platform as code, built on your laptop with no cloud account. Six sessions and a plan simulator that shows how a small-looking plan can still delete a zone full of data.">
+<meta property="og:url" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/">
+<meta property="og:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Learn Terraform with Phoebe">
+<meta name="twitter:description" content="Infrastructure as code for data teams. Six sessions, zero cost, one plan simulator.">
+<meta name="twitter:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<!-- social:end -->
+<title>Learn Terraform with Phoebe</title>
+<link rel="stylesheet" href="assets/style.css?v=2">
+<style>
+
+  .stats-row { display: flex; gap: 2.4rem; margin-top: 1.5rem; flex-wrap: wrap; }
+  .stat b { display: block; font-size: 2.1rem; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: .72rem; opacity: 1; text-transform: uppercase; letter-spacing: .09em; font-weight: 600; }
+
+  .course-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+  .course-card {
+    border: 1px solid var(--hairline);
+    border-top: 4px solid var(--diff, var(--indigo));
+    border-radius: var(--radius);
+    padding: 1.2rem 1.3rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    text-decoration: none;
+    color: var(--ink);
+    background: #fff;
+    transition: box-shadow .15s ease, border-color .15s ease, transform .15s ease;
+    position: relative;
+  }
+  .course-card:hover { border-color: var(--indigo-soft); border-top-color: var(--diff, var(--indigo)); box-shadow: 0 8px 28px rgba(var(--shadow-rgb),.16); transform: translateY(-3px); }
+  .course-card .cicon { font-size: 1.7rem; line-height: 1; }
+  .course-card .cnum { font-size: .72rem; font-weight: 700; color: var(--indigo); text-transform: uppercase; letter-spacing: .1em; }
+  .course-card h3 { font-size: 1.05rem; font-weight: 800; line-height: 1.3; }
+  .course-card p { font-size: .85rem; color: var(--muted); flex: 1; }
+  .course-card .meta { display: flex; gap: .4rem; flex-wrap: wrap; }
+
+  .diff-legend { display: flex; gap: 1rem; margin-top: 1.6rem; font-size: .74rem; color: var(--muted); font-weight: 600; flex-wrap: wrap; }
+  .diff-legend i { display: inline-block; width: .85rem; height: .35rem; border-radius: 999px; margin-right: .35rem; vertical-align: middle; }
+
+  .paths { margin-top: 2.6rem; }
+  .paths h2 { font-size: 1.3rem; font-weight: 800; margin-bottom: .3rem; }
+  .paths .plede { color: var(--muted); font-size: .92rem; margin-bottom: .8rem; }
+  .path { display: flex; gap: .55rem; align-items: center; padding: .75rem 0; border-bottom: .5px solid var(--hairline); flex-wrap: wrap; }
+  .path:last-child { border-bottom: none; }
+  .path b { min-width: 15.5rem; font-size: .9rem; }
+  .path .pstep { background: var(--indigo-50); color: var(--indigo-deep); border-radius: 999px; padding: .16rem .68rem; font-weight: 700; font-size: .8rem; text-decoration: none; transition: all .12s ease; }
+  .path .pstep:hover { background: var(--indigo); color: #fff; }
+  .path .parr { color: var(--muted); font-weight: 700; }
+
+  .mm-section { margin-top: 1.6rem; }
+  .mm-section h2 { font-size: 1.3rem; font-weight: 800; margin-bottom: .2rem; }
+  .mm-section .mm-lede { color: var(--muted); font-size: .92rem; margin-bottom: .4rem; }
+  .mm-wrap { border: 1px solid var(--hairline); border-radius: var(--radius); background: linear-gradient(180deg,#fff,var(--indigo-50)); padding: .6rem; overflow-x: auto; }
+  .mm-svg { width: 100%; height: auto; display: block; max-width: 60rem; margin: 0 auto; min-width: 34rem; }
+  .mm-link { cursor: pointer; text-decoration: none; }
+  .mm-node rect { transition: opacity .15s ease, filter .15s ease; }
+  .mm-node text { pointer-events: none; }
+  .mm-link:hover .mm-node rect { filter: brightness(1.06); }
+  .mm-edge { transition: opacity .15s ease; }
+
+  .not-this { border: 1px solid var(--hairline); border-left: 4px solid var(--clay); border-radius: var(--radius); background: #fff; padding: 1.1rem 1.3rem; margin-top: 1.2rem; }
+  .not-this h3 { font-size: .95rem; font-weight: 800; margin-bottom: .5rem; }
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap">
+    <div class="eyebrow">Learn with Phoebe · Data Engineering &amp; Infra</div>
+    <h1>Learn <span class="accent">Terraform</span> with Phoebe</h1>
+    <p class="sub">A data platform is buckets, catalogs, warehouses and grants, and most teams build it by clicking. Six sessions on writing it down instead: why declarative code beats click-ops, the HCL language, the state file that Terraform trusts more than your memory, modules and version pins, how to read a plan the way a reviewer should, and how to ship changes through a pull request. Everything runs on your laptop with the terraform or tofu CLI, at zero cost, with no cloud account. Every command and output on these pages was really run.</p>
+    <div class="stats-row">
+      <div class="stat"><b data-count="6">6</b><span>sessions</span></div>
+      <div class="stat"><b data-count="10">10</b><span>plan rungs on the bench</span></div>
+      <div class="stat"><b data-count="37">37</b><span>Associate 004 objectives mapped</span></div>
+      <div class="stat"><b data-count="0">0</b><span>cloud accounts needed</span></div>
+      <div class="stat"><b data-count="45">45</b><span>min per session</span></div>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+  <section class="section">
+    <div class="paths" style="margin-top:0">
+      <h2>The six sessions 🧭 <span style="font-size:.85rem;font-weight:600;color:var(--muted)">· from the first config to a reviewed apply</span></h2>
+      <p class="plede">The running case is <strong>Larkspur Freight, a constructed mid-size logistics company</strong> building its first data platform as code: a lake with raw, curated and serving zones in dev and prod, a catalog, and the grants on top. It grows one piece per session. Larkspur Freight is invented for teaching, and every page says so.</p>
+    </div>
+    <div class="course-grid">
+      <a class="course-card" href="courses/01-why-infrastructure-as-code.html" style="--diff:#34D399">
+        <span class="cicon">🏗️</span>
+        <span class="cnum">Session 1 · foundations</span>
+        <h3>Why infrastructure as code</h3>
+        <p>Click-ops against declarative code, desired state against actual state, providers and resources, and the init, plan, apply, destroy loop on a first config that runs on your laptop.</p>
+        <span class="meta"><span class="pill amber">▶ Start here</span></span>
+      </a>
+      <a class="course-card" href="courses/02-the-hcl-language.html" style="--diff:#34D399">
+        <span class="cicon">📝</span>
+        <span class="cnum">Session 2 · foundations</span>
+        <h3>The HCL language</h3>
+        <p>Blocks, types, variables with validation, outputs, locals and data sources, and why for_each keys survive a reordered list when count indexes do not. The lake zones, per environment.</p>
+        <span class="meta"><span class="pill">for_each over count</span></span>
+      </a>
+      <a class="course-card" href="courses/03-state-is-the-source-of-truth.html" style="--diff:#FBBF24">
+        <span class="cicon">🗄️</span>
+        <span class="cnum">Session 3 · core</span>
+        <h3>State is the source of truth</h3>
+        <p>What the state file holds, including your secrets in plain text. Break it three ways, lost, drifted and renamed, then fix it with import and moved blocks, state commands, a backend and a lock.</p>
+        <span class="meta"><span class="pill">break it, fix it</span></span>
+      </a>
+      <a class="course-card" href="courses/04-modules-and-versions.html" style="--diff:#FB923C">
+        <span class="cicon">🧩</span>
+        <span class="cnum">Session 4 · deeper</span>
+        <h3>Modules and versions</h3>
+        <p>One data-zone module used by dev and prod, version constraints and the lock file, and the same module shown against AWS, Google Cloud, Snowflake and Databricks resources.</p>
+        <span class="meta"><span class="pill">one module, two envs</span></span>
+      </a>
+      <a class="course-card" href="courses/05-read-a-plan-like-a-reviewer.html" style="--diff:#FB923C">
+        <span class="cicon">🔎</span>
+        <span class="cnum">Session 5 · bench night</span>
+        <h3>Read a plan like a reviewer</h3>
+        <p>Plan symbols, force-new attributes, lifecycle guard rails and the dependency graph that sets the apply order, on a plan simulator you can edit. A plan can look small and still destroy data.</p>
+        <span class="meta"><span class="pill amber">★ the bench</span></span>
+      </a>
+      <a class="course-card" href="courses/06-plan-on-pr-apply-on-merge.html" style="--diff:#FB923C">
+        <span class="cicon">🚢</span>
+        <span class="cnum">Session 6 · deeper</span>
+        <h3>Plan on the PR, apply on merge</h3>
+        <p>Directories against workspaces, a GitHub Actions gate, saved plans that go stale, HCP Terraform against OpenTofu, the licence split, and a map of the Associate (004) exam.</p>
+        <span class="meta"><span class="pill amber">🔒 the gate</span></span>
+      </a>
+    </div>
+    <p style="margin-top:1rem"><a class="pill amber" href="courses/05-read-a-plan-like-a-reviewer.html#bench">🔎 Open the plan simulator</a></p>
+    <div class="diff-legend">
+      <span><i style="background:#34D399"></i>foundations</span>
+      <span><i style="background:#FBBF24"></i>core</span>
+      <span><i style="background:#FB923C"></i>deeper and bench night</span>
+    </div>
+  </section>
+  <section class="section">
+    <div class="paths" style="margin-top:0">
+      <h2>Your passport 🎫</h2>
+      <p class="plede">Clear all three quiz questions in a session and it gets stamped. Six stamps means you can explain why a platform belongs in code, write HCL with variables and for_each, repair a broken state, build and pin a module, review a plan for the destroy hiding in it, and gate an apply behind a pull request. Stamps live in this browser only.</p>
+    </div>
+    <div class="pp-strip"></div>
+  </section>
+  <section class="section">
+    <div class="not-this">
+      <h3>What this is not, so you land in the right place 🧭</h3>
+      <table class="clean">
+        <tr><th>If your question is</th><th>Go here instead</th></tr>
+        <tr><td>What do S3, Glue, Athena and Redshift actually do for a data team?</td><td><a href="https://phoebefu6.github.io/learn-aws-with-phoebe/">AWS ↗</a></td></tr>
+        <tr><td>How do I build CI/CD for data pipelines and models?</td><td><a href="https://phoebefu6.github.io/learn-dataops-with-phoebe/">DataOps ↗</a></td></tr>
+        <tr><td>How do I design roles, grants and least privilege for data users?</td><td><a href="https://phoebefu6.github.io/learn-data-access-control-with-phoebe/">Data Access Control ↗</a></td></tr>
+        <tr><td>How do Databricks or a warehouse work once they exist?</td><td><a href="https://phoebefu6.github.io/learn-databricks-with-phoebe/">Databricks ↗</a> · <a href="https://phoebefu6.github.io/learn-data-warehouse-with-phoebe/">Data Warehouse ↗</a></td></tr>
+        <tr><td>How do I schedule and retry pipelines?</td><td><a href="https://phoebefu6.github.io/learn-data-orchestration-with-phoebe/">Data Orchestration ↗</a></td></tr>
+        <tr><td><strong>I want the platform itself written as code, reviewed before it changes, and rebuilt the same way every time.</strong></td><td><strong>you are in the right place</strong></td></tr>
+      </table>
+      <p style="margin-top:.7rem;font-size:.86rem;color:var(--muted)"><strong>Provisioning, as code, with a review gate.</strong> The services, the pipelines and the access design are taught next door and linked from here rather than repeated.</p>
+    </div>
+  </section>
+  <section class="section">
+    <div class="paths">
+      <h2>Choose your path 🗺️</h2>
+      <p class="plede">Two doors into the same habit: nothing changes in production that a person has not read as a plan first.</p>
+      <div class="path"><b>🧭 Leader path · I approve the changes</b>
+        <a class="pstep" href="courses/01-why-infrastructure-as-code.html">1</a><span class="parr">→</span>
+        <a class="pstep" href="courses/05-read-a-plan-like-a-reviewer.html">5</a><span class="parr">→</span>
+        <a class="pstep" href="courses/06-plan-on-pr-apply-on-merge.html">6</a>
+        <span style="font-size:.82rem;color:var(--muted)">why code, how to read a plan, how to gate it</span>
+      </div>
+      <div class="path"><b>🛠️ Builder path · I write the code</b>
+        <a class="pstep" href="courses/01-why-infrastructure-as-code.html">1</a><span class="parr">→</span>
+        <a class="pstep" href="courses/02-the-hcl-language.html">2</a><span class="parr">→</span>
+        <a class="pstep" href="courses/03-state-is-the-source-of-truth.html">3</a><span class="parr">→</span>
+        <a class="pstep" href="courses/04-modules-and-versions.html">4</a><span class="parr">→</span>
+        <a class="pstep" href="courses/05-read-a-plan-like-a-reviewer.html">5</a><span class="parr">→</span>
+        <a class="pstep" href="courses/06-plan-on-pr-apply-on-merge.html">6</a>
+        <span style="font-size:.82rem;color:var(--muted)">from the first config to a reviewed apply</span>
+      </div>
+    </div>
+  </section>
+  <section class="section">
+    <div class="paths" style="margin-top:0">
+      <h2>What is honest here 🧾</h2>
+      <p class="plede">Terraform moves fast and its history is retold loosely. Each claim on these pages carries its status.</p>
+    </div>
+    <table class="clean">
+      <tr><th>Claim</th><th>Status</th></tr>
+      <tr><td>Every terraform command and its output in a build-along</td><td><strong>Really run</strong> with Terraform 1.17.1 and the local, random and null providers; your ids, hashes and times will differ</td></tr>
+      <tr><td>Every number on the plan simulator</td><td><strong>Computed</strong> in your browser by a planning engine (diff plus dependency graph) and matched rung by rung against an independent Python version; it follows Terraform's rules for its own teaching resource types, and real providers add more</td></tr>
+      <tr><td>AWS, Google Cloud, Snowflake and Databricks code</td><td><strong>Shown, not applied:</strong> no cloud account is used; argument names were checked against each provider's own docs</td></tr>
+      <tr><td>Licence, OpenTofu and IBM dates</td><td><strong>Read at source</strong> on HashiCorp, Linux Foundation, CNCF, OpenTofu and IBM pages; fast-moving, so each page carries its read date</td></tr>
+      <tr><td>Larkspur Freight, its zones, ids and people</td><td><strong>Constructed,</strong> for teaching</td></tr>
+    </table>
+  </section>
+  <section class="section mm-section">
+    <h2>The knowledge map 🧠</h2>
+    <p class="mm-lede">The whole path at a glance - hover a session to spotlight its concepts, click any node to jump in.</p>
+    <div class="mm-wrap"><div id="mindmap"></div></div>
+  </section>
+  <footer class="pagefoot">
+    <span>learn-terraform-with-phoebe · by Phoebe Fu &nbsp;·&nbsp; 📚 <a href="https://phoebefu6.github.io/learn-with-phoebe/">Learn with Phoebe ↗</a></span>
+    <span>Neighbours on the shelf: <a href="https://phoebefu6.github.io/learn-aws-with-phoebe/">AWS ↗</a> &nbsp;·&nbsp; <a href="https://phoebefu6.github.io/learn-dataops-with-phoebe/">DataOps ↗</a> &nbsp;·&nbsp; <a href="https://phoebefu6.github.io/learn-data-warehouse-with-phoebe/">Data Warehouse ↗</a></span>
+  </footer>
+</main>
+<script>
+window.MINDMAP_DATA = {
+ "title": "Terra-\nform",
+ "centerColor": "#4A2478",
+ "sessions": [
+  {
+   "label": "Why infrastructure\nas code",
+   "href": "courses/01-why-infrastructure-as-code.html",
+   "color": "#34D399",
+   "concepts": [
+    {
+     "label": "Desired vs actual state",
+     "href": "courses/01-why-infrastructure-as-code.html"
+    },
+    {
+     "label": "init, plan, apply, destroy",
+     "href": "courses/01-why-infrastructure-as-code.html"
+    },
+    {
+     "label": "Idempotence: No changes",
+     "href": "courses/01-why-infrastructure-as-code.html"
+    }
+   ]
+  },
+  {
+   "label": "The HCL\nlanguage",
+   "href": "courses/02-the-hcl-language.html",
+   "color": "#34D399",
+   "concepts": [
+    {
+     "label": "Variables and outputs",
+     "href": "courses/02-the-hcl-language.html"
+    },
+    {
+     "label": "for_each keys survive",
+     "href": "courses/02-the-hcl-language.html"
+    },
+    {
+     "label": "Data sources read",
+     "href": "courses/02-the-hcl-language.html"
+    }
+   ]
+  },
+  {
+   "label": "State is the\nsource of truth",
+   "href": "courses/03-state-is-the-source-of-truth.html",
+   "color": "#FBBF24",
+   "concepts": [
+    {
+     "label": "Secrets sit in state",
+     "href": "courses/03-state-is-the-source-of-truth.html"
+    },
+    {
+     "label": "Locking and backends",
+     "href": "courses/03-state-is-the-source-of-truth.html"
+    },
+    {
+     "label": "moved and import blocks",
+     "href": "courses/03-state-is-the-source-of-truth.html"
+    }
+   ]
+  },
+  {
+   "label": "Modules and\nversions",
+   "href": "courses/04-modules-and-versions.html",
+   "color": "#FB923C",
+   "concepts": [
+    {
+     "label": "One data-zone module",
+     "href": "courses/04-modules-and-versions.html"
+    },
+    {
+     "label": "~> and the lock file",
+     "href": "courses/04-modules-and-versions.html"
+    },
+    {
+     "label": "Same module, 4 clouds",
+     "href": "courses/04-modules-and-versions.html"
+    }
+   ]
+  },
+  {
+   "label": "Read a plan\nlike a reviewer",
+   "href": "courses/05-read-a-plan-like-a-reviewer.html",
+   "color": "#FB923C",
+   "concepts": [
+    {
+     "label": "Symbols and replaces",
+     "href": "courses/05-read-a-plan-like-a-reviewer.html"
+    },
+    {
+     "label": "Graph sets apply order",
+     "href": "courses/05-read-a-plan-like-a-reviewer.html#bench"
+    },
+    {
+     "label": "ignore_changes: anti",
+     "href": "courses/05-read-a-plan-like-a-reviewer.html#bench"
+    }
+   ]
+  },
+  {
+   "label": "Plan on the PR,\napply on merge",
+   "href": "courses/06-plan-on-pr-apply-on-merge.html",
+   "color": "#FB923C",
+   "concepts": [
+    {
+     "label": "Directories over workspaces",
+     "href": "courses/06-plan-on-pr-apply-on-merge.html"
+    },
+    {
+     "label": "Saved plans go stale",
+     "href": "courses/06-plan-on-pr-apply-on-merge.html"
+    },
+    {
+     "label": "BSL, MPL and OpenTofu",
+     "href": "courses/06-plan-on-pr-apply-on-merge.html"
+    }
+   ]
+  }
+ ]
+};
+</script>
+<script src="assets/mindmap.js?v=1"></script>
+<script src="assets/app.js?v=1"></script>
+</body>
+</html>

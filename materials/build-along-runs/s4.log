@@ -1,0 +1,69 @@
+$ terraform init
+Initializing the backend...
+Initializing modules...
+- dev_zone in modules/data-zone
+- prod_zone in modules/data-zone
+Initializing provider plugins...
+- Finding hashicorp/local versions matching ">= 2.4.0, ~> 2.5, < 3.0.0"...
+- Installing hashicorp/local v2.9.1...
+- Installed hashicorp/local v2.9.1 (signed by HashiCorp)
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+$ terraform providers
+
+Providers required by configuration:
+.
+├── provider[registry.terraform.io/hashicorp/local] ~> 2.5
+├── module.prod_zone
+│   └── provider[registry.terraform.io/hashicorp/local] >= 2.4.0, < 3.0.0
+└── module.dev_zone
+    └── provider[registry.terraform.io/hashicorp/local] >= 2.4.0, < 3.0.0
+
+[exit 0]
+# This file is maintained automatically by "terraform init".
+# Manual edits may be lost in future updates.
+
+provider "registry.terraform.io/hashicorp/local" {
+  version     = "2.9.1"
+  constraints = ">= 2.4.0, ~> 2.5, < 3.0.0"
+  hashes = [
+    "h1:OZGJN0LSSat5QIxZPxDXtVr4XpHb2oG7cVKJhSqBFIE=",
+    "zh:25606c7a5e308144fb627f6e31611bb52ff72bb9ae2d27af39673ab1a6b3c1bf",
+    "zh:2568c4ef4dab31821f6f7040af0d1a2aa2b9455b8d9cc546598b791b8ada34cd",
+    "zh:25ac210f136042047975896e5e11fe6012425301c826d6b7ce22a49f96a1e0e8",
+    "zh:55d3a7bf01eced8e1f259b548020ef1221c5687e0fe6b5b30f81ad0b4121ff12",
+      + filename             = "./lake/larkspur-dev-curated/ZONE.txt"
+      + filename             = "./lake/larkspur-dev-raw/ZONE.txt"
+      + filename             = "./lake/larkspur-dev-serving/ZONE.txt"
+      + filename             = "./lake/larkspur-prod-curated/ZONE.txt"
+      + filename             = "./lake/larkspur-prod-raw/ZONE.txt"
+      + filename             = "./lake/larkspur-prod-serving/ZONE.txt"
+      + "larkspur-dev-curated",
+      + "larkspur-dev-raw",
+      + "larkspur-dev-serving",
+      + "larkspur-prod-curated",
+      + "larkspur-prod-raw",
+      + "larkspur-prod-serving",
+module.prod_zone["curated"].local_file.marker: Creation complete after 0s [id=1b71ccc17b6063f2950a8b10506a2b59f78c2d48]
+module.dev_zone["raw"].local_file.marker: Creation complete after 0s [id=5c759187767bc174c5c0ac31b150de23b3fb99d1]
+module.dev_zone["serving"].local_file.marker: Creation complete after 0s [id=adf707491db8d1257491c8bad80c41f218151274]
+module.prod_zone["raw"].local_file.marker: Creation complete after 0s [id=86419ec304505fde21ecf4532962c6252295ef18]
+module.dev_zone["curated"].local_file.marker: Creation complete after 0s [id=3edcd67f52e40eaf609713752ee4632c230124eb]
+module.prod_zone["serving"].local_file.marker: Creation complete after 0s [id=c20813c48604ea4cbd42f44d5e35adfc85dd96ae]
+Apply complete! Resources: 6 added, 0 changed, 0 destroyed.
+Outputs:
+  "larkspur-dev-curated",
+  "larkspur-dev-raw",
+  "larkspur-dev-serving",
+  "larkspur-prod-curated",
+  "larkspur-prod-raw",
+  "larkspur-prod-serving",
+$ terraform state list
+module.dev_zone["curated"].local_file.marker
+module.dev_zone["raw"].local_file.marker
+module.dev_zone["serving"].local_file.marker
+module.prod_zone["curated"].local_file.marker
+module.prod_zone["raw"].local_file.marker
+module.prod_zone["serving"].local_file.marker
+[exit 0]

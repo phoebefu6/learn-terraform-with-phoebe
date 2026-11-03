@@ -1,0 +1,9 @@
+$ terraform graph
+digraph G {
+  rankdir = "RL";
+  node [shape = rect, fontname = "sans-serif"];
+  "local_file.readme" [label="local_file.readme"];
+  "random_id.platform" [label="random_id.platform"];
+  "local_file.readme" -> "random_id.platform";
+}
+[exit 0]

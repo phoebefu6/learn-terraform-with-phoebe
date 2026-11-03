@@ -1,0 +1,29 @@
+$ terraform init
+Initializing the backend...
+Successfully configured the backend "local"! Terraform will automatically
+use this backend unless the backend configuration changes.
+Initializing provider plugins...
+# a teammate runs plan while the first apply is still running
+$ terraform plan
+
+Error: Error acquiring the state lock
+
+Error message: resource temporarily unavailable
+Lock Info:
+  ID:        a57df1fa-e9d3-5082-3d28-df142f0623c2
+  Path:      state/larkspur-dev.tfstate
+  Operation: OperationTypeApply
+  Who:       <user>@<host>
+  Version:   1.17.1
+  Created:   2026-11-03 04:11:24.330202 +0000 UTC
+  Info:      
+
+
+Terraform acquires a state lock to protect the state from being written
+by multiple users at the same time. Please resolve the issue above and try
+again. For most commands, you can disable locking with the "-lock=false"
+flag, but this is not recommended.
+[exit 1]
+
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+larkspur-dev.tfstate

@@ -1,0 +1,47 @@
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+[exit 0]
+# renamed local_file.zone -> local_file.lake_zone, no moved block
+$ terraform plan
+  # local_file.lake_zone["curated"] will be created
+  # local_file.lake_zone["raw"] will be created
+  # local_file.lake_zone["serving"] will be created
+  # local_file.zone["curated"] will be destroyed
+  # (because local_file.zone is not in configuration)
+  # local_file.zone["raw"] will be destroyed
+  # (because local_file.zone is not in configuration)
+  # local_file.zone["serving"] will be destroyed
+  # (because local_file.zone is not in configuration)
+Plan: 3 to add, 0 to change, 3 to destroy.
+[exit 0]
+# added moved block
+$ terraform plan
+  # local_file.zone["curated"] has moved to local_file.lake_zone["curated"]
+        # (10 unchanged attributes hidden)
+  # local_file.zone["raw"] has moved to local_file.lake_zone["raw"]
+        # (10 unchanged attributes hidden)
+  # local_file.zone["serving"] has moved to local_file.lake_zone["serving"]
+        # (10 unchanged attributes hidden)
+Plan: 0 to add, 0 to change, 0 to destroy.
+[exit 0]
+Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+[exit 0]
+$ terraform state list
+local_file.lake_zone["curated"]
+local_file.lake_zone["raw"]
+local_file.lake_zone["serving"]
+[exit 0]
+$ terraform state mv local_file.lake_zone["serving"] local_file.serving_zone_old
+Move "local_file.lake_zone[\"serving\"]" to "local_file.serving_zone_old"
+Successfully moved 1 object(s).
+[exit 0]
+$ terraform state rm local_file.serving_zone_old
+Removed local_file.serving_zone_old
+Successfully removed 1 resource instance(s).
+[exit 0]
+larkspur-dev-curated
+larkspur-dev-raw
+larkspur-dev-serving
+$ terraform plan
+  # local_file.lake_zone["serving"] will be created
+Plan: 1 to add, 0 to change, 0 to destroy.
+[exit 0]

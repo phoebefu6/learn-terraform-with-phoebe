@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- social:start -->
+<meta name="description" content="Session 3 of 6. What the Terraform state file holds and why secrets live in it, backends and locking, drift and refresh-only plans, and the repair tools: moved, import, removed, state mv and state rm. State broken three ways and fixed, really run on your laptop with no cloud account.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Learn with Phoebe">
+<meta property="og:title" content="State is the source of truth - learn terraform with phoebe">
+<meta property="og:description" content="Session 3 of 6. The ledger that binds your code to real objects: what it holds, who may write it, and how to repair it without hand-editing.">
+<meta property="og:url" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/courses/03-state-is-the-source-of-truth.html">
+<meta property="og:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="State is the source of truth - learn terraform with phoebe">
+<meta name="twitter:description" content="Session 3 of 6. State, locking, drift, and the moved, import and removed blocks, broken and fixed for real.">
+<meta name="twitter:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<!-- social:end -->
+<title>Session 3 · State is the source of truth - learn terraform with phoebe</title>
+<link rel="stylesheet" href="../assets/style.css?v=2">
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">learn-terraform-with-phoebe</a> / Session 3 of 6</span>
+    <button class="btn" id="toggle-all" type="button">Expand all</button>
+    <button class="btn primary" id="zoom-toggle" type="button">Projector zoom: off</button>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="eyebrow">Learn Terraform with Phoebe · Session 3 of 6</div>
+    <h1>State is the source of <span class="accent">truth</span></h1>
+    <p class="sub">Your config says what you want. The cloud holds what exists. Between them sits one file that most teams never open until the day it hurts: the state, Terraform's ledger of which real object belongs to which block of code. Tonight you open it, find the secret you thought you had hidden, learn who is allowed to write it and how the lock keeps two people apart, and then break it three ways on purpose, by drifting, renaming and losing it, and repair each one with the tool built for that break.</p>
+    <div class="chip-row">
+      <span class="chip level">🟡 Core</span>
+      <span class="chip audience">Data engineers; leaders read Part 1</span>
+      <span class="chip audience">terraform or tofu CLI, no cloud account</span>
+      <span class="chip time">45 min</span>
+    </div>
+    <div class="agenda">
+      <span class="a1" style="flex:1">0-3 · Welcome</span>
+      <span class="a2" style="flex:5">3-18 · What state holds, backends, repair tools</span>
+      <span class="a3" style="flex:7">18-40 · Build-along: break it, fix it</span>
+      <span class="a4" style="flex:2">40-45 · Q&amp;A</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="section" id="intro">
+    <div class="section-kicker">
+      <span class="klabel">Part 0</span>
+      <h2>Where we pick up</h2>
+    </div>
+    <p class="lede">The running case is constructed. Larkspur Freight is an invented mid-size logistics company writing its first data platform as code, and Priya is its data lead. After session 2 Larkspur has three lake zones, raw, curated and serving, created with for_each, plus a warehouse password marked <code>sensitive</code>. Priya now has three worries she cannot answer from the config alone: where that password actually ended up, what happens when two engineers run Terraform at the same moment, and what to do on the morning someone renames a block, edits a zone by hand or deletes the state file. Tonight answers all three, with stand-in resources on your laptop and no bill.</p>
+
+    <div class="legend">
+      <span class="pill">🎫 Clear all three quiz questions to stamp your passport</span>
+      <span class="pill">Live = presented in the 45 minutes</span>
+      <span class="pill">Self-study = the full depth, after class</span>
+      <span class="pill">★ Build-along = run it yourself</span>
+    </div>
+
+    <div class="callout win">
+      <p><strong>★ What you walk out with tonight.</strong> A clear picture of what the state file binds and why it must never be hand-edited, a backend choice you can defend (including S3 locking without DynamoDB), and a working folder where you have drifted, renamed and lost the state and repaired each break with refresh-only, a moved block and an import block, then watched the lock turn a second engineer away.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-1">
+    <div class="section-kicker">
+      <span class="klabel">Part 1 · covers what state holds and why secrets live in it</span>
+      <h2>A ledger from address to real object</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">Terraform cannot look at a cloud account and know which bucket is "the raw zone". The state file tells it. Every resource address in your config, such as <code>local_file.zone["raw"]</code>, is written down next to the id of exactly one real object and every attribute Terraform last saw on it. Plans read this ledger, applies rewrite it, and anything stored in it, including values you marked sensitive, sits there as plain text.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 322" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Three columns. Left, the config main.tf lists local_file.zone raw, curated and serving, and an output warehouse_password. Middle, the state file terraform.tfstate holds one row per address with the real object id: raw 2d18145f, curated 1901e695, serving 6bd6387a. A fourth row, highlighted red, holds the sensitive output value in plain text. Right, the actual files on disk, larkspur-dev-raw, curated and serving, each bound to one state row. The secret row binds to no object; it is just a value anyone who can read the file can see.">
+        <defs>
+          <filter id="w3aSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="31" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w3aHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w3aAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w3aAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w3aH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w3aL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w3aS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w3aB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w3aR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w3aA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w3aN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w3aH" x="30" y="26">THE STATE FILE IS A LEDGER: ADDRESS ON THE LEFT, REAL OBJECT ON THE RIGHT</text>
+
+        <g filter="url(#w3aSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="60" width="210" height="200" rx="10" transform="rotate(-0.6 135 160)" fill="#FFFFFF"/>
+          <rect x="290" y="60" width="330" height="200" rx="10" transform="rotate(0.4 455 160)" fill="#E3F3F1" stroke="#0F766E"/>
+          <path d="M300 110 L610 110 M300 150 L610 150 M300 190 L610 190" stroke="#D6CEE2" stroke-width="1.4"/>
+          <rect x="298" y="196" width="314" height="56" rx="6" transform="rotate(-0.5 455 224)" fill="#FEF2F2" stroke="#FCA5A5"/>
+          <rect x="670" y="60" width="190" height="140" rx="10" transform="rotate(0.5 765 130)" fill="#F4EEFB"/>
+          <rect x="682" y="72" width="164" height="30" rx="5" transform="rotate(-1.2 764 87)" fill="#FFFFFF"/>
+          <rect x="682" y="112" width="164" height="30" rx="5" transform="rotate(1 764 127)" fill="#FFFFFF"/>
+          <rect x="682" y="152" width="164" height="30" rx="5" transform="rotate(-0.8 764 167)" fill="#FFFFFF"/>
+          <path d="M244 86 L286 86" marker-end="url(#w3aAr)"/>
+          <path d="M244 126 L286 126" marker-end="url(#w3aAr)"/>
+          <path d="M244 166 L286 166" marker-end="url(#w3aAr)"/>
+          <path d="M244 226 L294 226" marker-end="url(#w3aAr)"/>
+          <path d="M624 86 L678 86" stroke="#0F766E" marker-end="url(#w3aAt)"/>
+          <path d="M624 126 L678 126" stroke="#0F766E" marker-end="url(#w3aAt)"/>
+          <path d="M624 166 L678 166" stroke="#0F766E" marker-end="url(#w3aAt)"/>
+        </g>
+
+        <text class="w3aA" x="135" y="50" text-anchor="middle">DESIRED · main.tf</text>
+        <text class="w3aA" x="455" y="50" text-anchor="middle">RECORDED · terraform.tfstate</text>
+        <text class="w3aA" x="765" y="50" text-anchor="middle">ACTUAL · files on disk</text>
+        <text class="w3aL" x="42" y="90">local_file.zone["raw"]</text>
+        <text class="w3aL" x="42" y="130">local_file.zone["curated"]</text>
+        <text class="w3aL" x="42" y="170">local_file.zone["serving"]</text>
+        <text class="w3aL" x="42" y="222">output</text>
+        <text class="w3aL" x="42" y="240">warehouse_password</text>
+        <text class="w3aL" x="306" y="82">local_file.zone["raw"]</text>
+        <text class="w3aS" x="306" y="100">id = 2d18145f... plus every attribute</text>
+        <text class="w3aL" x="306" y="128">local_file.zone["curated"]</text>
+        <text class="w3aS" x="306" y="144">id = 1901e695...</text>
+        <text class="w3aL" x="306" y="168">local_file.zone["serving"]</text>
+        <text class="w3aS" x="306" y="184">id = 6bd6387a...</text>
+        <text class="w3aR" x="312" y="218">output warehouse_password</text>
+        <text class="w3aR" x="312" y="238">sensitive = true, value in plain text</text>
+        <text class="w3aS" x="696" y="91">larkspur-dev-raw</text>
+        <text class="w3aS" x="696" y="131">larkspur-dev-curated</text>
+        <text class="w3aS" x="696" y="171">larkspur-dev-serving</text>
+        <text class="w3aS" x="672" y="226">not an object: a value</text>
+        <text class="w3aS" x="672" y="242">anyone who can read</text>
+        <text class="w3aS" x="672" y="258">the file can see</text>
+        <text class="w3aB" x="455" y="284" text-anchor="middle">terraform.tfstate.backup keeps the previous version</text>
+
+        <text class="w3aN" x="30" y="310">Ids are from the real run in s3a.log; yours will differ. Lose a row and Terraform forgets the object exists.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - the state is the only place an address meets a real id, which makes it both essential and sensitive</figcaption>
+    </figure>
+
+    <details class="card" open>
+      <summary><span class="mode live">Live</span>The state binds addresses to real objects<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>By default Terraform keeps state in a local file named <code>terraform.tfstate</code> in the working directory, and keeps the version before the last write in <code>terraform.tfstate.backup</code>. HashiCorp's state page is blunt about the file: "Do not directly edit this file." The reason is the binding. The JSON looks editable, but one wrong id silently points an address at a different object, and the next apply acts on it.</p>
+        <p>Instead the CLI gives you <code>terraform state</code> subcommands, and the docs say to use them "instead modifying the state directly". Every one that changes state writes a backup first, and those backups "can not be disabled". Two read-only ones are worth running daily. Real output from Larkspur's dev lake, run with Terraform 1.17.1:</p>
+        <div class="prompt-box good"><span class="label">★ Real run · state list and state show (trimmed)</span>$ terraform state list
+local_file.zone["curated"]
+local_file.zone["raw"]
+local_file.zone["serving"]
+$ terraform state show local_file.zone["raw"]
+# local_file.zone["raw"]:
+resource "local_file" "zone" {
+    content              = &lt;&lt;-EOT
+        zone=raw env=dev
+    EOT
+...
+    filename             = "./lake/larkspur-dev-raw/ZONE.txt"
+    id                   = "2d18145fe7adc7af527ec22fec11794e1716e524"
+}</div>
+        <p>Read the last line: this provider uses a hash of the file's content as the object's id. Remember that; it explains a surprise in Part 3.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>Secrets in plain text<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>In session 2 Larkspur's <code>warehouse_password</code> variable and output were marked <code>sensitive = true</code>, and the CLI printed <code>&lt;sensitive&gt;</code> instead of the value. Then <code>grep -c</code> on the state file counted it once. That is documented behaviour, not a bug. HashiCorp's sensitive-data page says "Terraform stores your state in a plaintext file, which includes any secret values you defined in your configuration", and that values with the <code>sensitive</code> argument are stored "in both state and plan files". <code>sensitive</code> hides a value from the screen; it does not hide it from the file.</p>
+        <p>So treat the state file, and any saved plan file, with the same care as the secret itself. Whether it is encrypted at rest depends on where it lives: in HashiCorp's words, "the encryption method depends on your specific backend". OpenTofu took a different route and added optional end-to-end encryption for state files in its 1.7.0 release, covering state and plan files at rest, locally or in a backend.</p>
+        <p>Newer Terraform releases add ways to keep some values out of state altogether: ephemeral values in 1.10.0 and write-only attributes in 1.11.0, neither of which is persisted to state; both are worth reading about once the basics here are solid.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>The state file in the wrong place.</strong> A familiar pattern: a team keeps local state, someone commits <code>terraform.tfstate</code> to the repository "so the others can use it", or attaches it to a support ticket to show a problem. The config had every secret marked sensitive and passed review. The state file carried the values in plain text to everyone with read access to the repository. The fix is structural, not a reminder: keep state in a backend with access control and encryption at rest, and keep <code>*.tfstate</code> out of version control.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-2">
+    <div class="section-kicker">
+      <span class="klabel">Part 2 · covers backends and locking</span>
+      <h2>One state, many hands, one lock</h2>
+      <span class="tag concept">4 min live</span>
+    </div>
+    <p class="lede">A backend decides where state lives and who can reach it. On one laptop the local backend is enough. The moment two people, or a person and a pipeline, run Terraform against the same platform, the state has to be shared, and a shared file needs a rule for writers. That rule is the lock: whoever is writing holds it, and everyone else is turned away until it is released.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 296" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Terminal 1 runs apply and takes the lock on state/larkspur-dev.tfstate, operation OperationTypeApply. Terminal 2 runs plan at the same time; its request reaches the lock and is turned away with Error acquiring the state lock. Only the lock holder writes the state file. A note warns that force-unlock while someone holds the lock can give two writers on one file.">
+        <defs>
+          <filter id="w3bSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="47" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w3bHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w3bAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w3bAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w3bH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w3bL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w3bS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w3bB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w3bR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w3bN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w3bH" x="30" y="26">TWO ENGINEERS, ONE STATE FILE, ONE LOCK</text>
+
+        <g filter="url(#w3bSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="80" cy="110" r="12" fill="#FFFFFF"/>
+          <circle cx="80" cy="220" r="12" fill="#FFFFFF"/>
+          <rect x="330" y="130" width="150" height="60" rx="10" transform="rotate(-1.5 405 160)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="600" y="110" width="220" height="100" rx="10" transform="rotate(0.6 710 160)" fill="url(#w3bHc)"/>
+          <rect x="612" y="134" width="196" height="50" rx="6" transform="rotate(-0.4 710 159)" fill="#FFFFFF"/>
+          <path d="M96 114 C180 120 260 140 324 150" stroke="#0F766E" marker-end="url(#w3bAt)"/>
+          <path d="M96 216 C180 206 260 190 322 180" stroke="#991B1B" marker-end="url(#w3bAr)"/>
+          <path d="M486 160 L594 160" stroke="#0F766E" marker-end="url(#w3bAt)"/>
+        </g>
+
+        <text class="w3bL" x="100" y="80">Terminal 1 · apply -auto-approve</text>
+        <text class="w3bS" x="100" y="96">holds the lock for the whole run</text>
+        <text class="w3bL" x="100" y="246">Terminal 2 · terraform plan</text>
+        <text class="w3bR" x="100" y="264">turned away, exit 1</text>
+        <text class="w3bB" x="405" y="156" text-anchor="middle">lock held</text>
+        <text class="w3bS" x="405" y="174" text-anchor="middle">OperationTypeApply</text>
+        <text class="w3bR" x="330" y="222">Error: Error acquiring the state lock</text>
+        <text class="w3bL" x="710" y="156" text-anchor="middle">state/larkspur-dev.tfstate</text>
+        <text class="w3bS" x="710" y="174" text-anchor="middle">one writer at a time</text>
+        <text class="w3bR" x="600" y="244">force-unlock while someone holds it:</text>
+        <text class="w3bR" x="600" y="260">two writers, one file</text>
+
+        <text class="w3bN" x="30" y="286">Lock path, operation and error are from the real run in s3d.log. Not every backend locks: check its page.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - the lock does not make the second run wait its turn; it refuses it, so nobody writes over a half-finished apply</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>Remote backends and the lock<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>HashiCorp describes the local backend in one line: it "stores state on the local filesystem, locks that state using system APIs, and performs operations locally." A remote backend moves the file somewhere shared, such as an object store, so that every engineer and pipeline reads the same ledger. Locking is automatic where the backend supports it: "Terraform will lock your state for all operations that could write state." The same page warns that "Not all backends support locking", and leaves the detail to each backend's own page. Check it before you choose one.</p>
+        <p>Here is the lock doing its job, in the build-along's final step. Terminal 1 was applying; a teammate ran plan against the same state from terminal 2:</p>
+        <div class="prompt-box good"><span class="label">★ Real run · the second writer is refused (trimmed)</span>$ terraform plan
+
+Error: Error acquiring the state lock
+
+Error message: resource temporarily unavailable
+Lock Info:
+  ID:        a57df1fa-e9d3-5082-3d28-df142f0623c2
+  Path:      state/larkspur-dev.tfstate
+  Operation: OperationTypeApply
+  Who:       &lt;user&gt;@&lt;host&gt;
+  Version:   1.17.1
+  Created:   2026-11-03 04:11:24.330202 +0000 UTC
+...
+Terraform acquires a state lock to protect the state from being written
+by multiple users at the same time. Please resolve the issue above and try
+again. For most commands, you can disable locking with the "-lock=false"
+flag, but this is not recommended.</div>
+        <p>The lock info tells you who holds it and since when, so you can ask them rather than guess. If a run crashed and left a stale lock, <code>terraform force-unlock</code> with that ID releases it. Use it only when you are sure the holder is gone: HashiCorp warns that "If you unlock the state when someone else is holding the lock it could cause multiple writers."</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>S3 without DynamoDB<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>For years the standard S3 backend recipe paired a bucket for the state with a DynamoDB table for the lock. That changed. Terraform 1.10.0 added S3 native state locking, and 1.11.0 made it generally available and deprecated the DynamoDB-related arguments. The current S3 backend page still says DynamoDB-based locking "is deprecated and will be removed in a future minor version": deprecated, not yet removed. Locking on S3 is opt-in through <code>use_lockfile</code>, which defaults to <code>false</code>, so a backend block without it does not lock at all.</p>
+        <div class="prompt-box good"><span class="label">S3 backend for Larkspur · shown, not applied</span>terraform {
+  backend "s3" {
+    bucket       = "larkspur-terraform-state"
+    key          = "data-platform/dev.tfstate"
+    region       = "eu-west-1"
+    use_lockfile = true
+    encrypt      = true
+  }
+}</div>
+        <p>The bucket name and region are Larkspur's, constructed. Who may read that bucket is an access design question; the IAM side belongs to <a href="https://phoebefu6.github.io/learn-data-access-control-with-phoebe/">Learn Data Access Control with Phoebe</a>, and the service itself to <a href="https://phoebefu6.github.io/learn-aws-with-phoebe/">Learn AWS with Phoebe</a>.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>Two pipelines applying at once.</strong> A familiar pattern: a scheduled pipeline applies the data platform every night, and an engineer merges a fix that triggers a second apply while the first is still running. With a locking backend the second run fails fast with the lock error and the fix waits a few minutes. With a backend that does not lock, or an S3 block missing <code>use_lockfile</code>, both runs read the same starting state and the last one to finish overwrites the other's record. Nothing fails loudly; the state is simply wrong until someone notices drift.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-3">
+    <div class="section-kicker">
+      <span class="klabel">Part 3 · covers drift and the repair tools</span>
+      <h2>When the ledger and the world disagree</h2>
+      <span class="tag concept">6 min live</span>
+    </div>
+    <p class="lede">State goes wrong in a small number of ways, and Terraform has a dedicated tool for each one. The skill is diagnosis: decide which of the three boxes from session 1 moved, desired, recorded or actual, and reach for the tool that moves the ledger without moving the world. Reaching for a text editor on the state file is never on the list.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 364" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A decision tree. What broke? Four branches. Renamed in code: use a moved block, since 1.1.0. Real thing exists but is not in state: use an import block, since 1.5.0. Drop it from Terraform but keep the object: a removed block with destroy = false, since 1.7.0, or terraform state rm. Changed outside Terraform: run plan -refresh-only, then fix the code or the object. Along the bottom, the wrong way: never open terraform.tfstate in an editor.">
+        <defs>
+          <filter id="w3cSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="59" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <marker id="w3cAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w3cH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w3cL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w3cS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w3cB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w3cR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w3cV { font: 800 16px Inter, sans-serif; fill: #4A2478; }
+          .w3cN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w3cH" x="30" y="26">WHAT BROKE? PICK THE TOOL THAT MOVES THE LEDGER, NOT THE WORLD</text>
+
+        <g filter="url(#w3cSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="340" y="44" width="200" height="46" rx="10" transform="rotate(-0.8 440 67)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="30" y="130" width="190" height="56" rx="8" transform="rotate(-1.2 125 158)" fill="#FFFFFF"/>
+          <rect x="245" y="130" width="190" height="56" rx="8" transform="rotate(0.9 340 158)" fill="#FFFFFF"/>
+          <rect x="460" y="130" width="190" height="56" rx="8" transform="rotate(-0.7 555 158)" fill="#FFFFFF"/>
+          <rect x="675" y="130" width="190" height="56" rx="8" transform="rotate(1.1 770 158)" fill="#FFFFFF"/>
+          <rect x="30" y="220" width="190" height="70" rx="8" transform="rotate(0.6 125 255)" fill="#F4EEFB"/>
+          <rect x="245" y="220" width="190" height="70" rx="8" transform="rotate(-0.8 340 255)" fill="#F4EEFB"/>
+          <rect x="460" y="220" width="190" height="70" rx="8" transform="rotate(0.7 555 255)" fill="#F4EEFB"/>
+          <rect x="675" y="220" width="190" height="70" rx="8" transform="rotate(-0.9 770 255)" fill="#F4EEFB"/>
+          <path d="M420 94 C400 112 140 104 125 124" marker-end="url(#w3cAr)"/>
+          <path d="M430 94 C420 108 345 110 340 124" marker-end="url(#w3cAr)"/>
+          <path d="M450 94 C460 108 550 110 555 124" marker-end="url(#w3cAr)"/>
+          <path d="M460 94 C480 112 750 104 770 124" marker-end="url(#w3cAr)"/>
+          <path d="M125 190 L125 214" marker-end="url(#w3cAr)"/>
+          <path d="M340 190 L340 214" marker-end="url(#w3cAr)"/>
+          <path d="M555 190 L555 214" marker-end="url(#w3cAr)"/>
+          <path d="M770 190 L770 214" marker-end="url(#w3cAr)"/>
+          <rect x="30" y="306" width="835" height="28" rx="6" transform="rotate(-0.2 447 320)" fill="#FEF2F2" stroke="#FCA5A5"/>
+        </g>
+
+        <text class="w3cV" x="440" y="73" text-anchor="middle">What broke?</text>
+        <text class="w3cL" x="125" y="162" text-anchor="middle">Renamed in code</text>
+        <text class="w3cL" x="340" y="153" text-anchor="middle">Real thing exists,</text>
+        <text class="w3cL" x="340" y="171" text-anchor="middle">not in state</text>
+        <text class="w3cL" x="555" y="153" text-anchor="middle">Drop from Terraform,</text>
+        <text class="w3cL" x="555" y="171" text-anchor="middle">keep the object</text>
+        <text class="w3cL" x="770" y="153" text-anchor="middle">Changed outside</text>
+        <text class="w3cL" x="770" y="171" text-anchor="middle">Terraform</text>
+        <text class="w3cB" x="125" y="246" text-anchor="middle">moved block</text>
+        <text class="w3cS" x="125" y="264" text-anchor="middle">since 1.1.0</text>
+        <text class="w3cB" x="340" y="246" text-anchor="middle">import block</text>
+        <text class="w3cS" x="340" y="264" text-anchor="middle">since 1.5.0</text>
+        <text class="w3cB" x="555" y="242" text-anchor="middle">removed block,</text>
+        <text class="w3cS" x="555" y="260" text-anchor="middle">destroy = false (1.7.0+)</text>
+        <text class="w3cS" x="555" y="276" text-anchor="middle">or terraform state rm</text>
+        <text class="w3cB" x="770" y="246" text-anchor="middle">plan -refresh-only</text>
+        <text class="w3cS" x="770" y="264" text-anchor="middle">then fix code or object</text>
+        <text class="w3cR" x="447" y="324" text-anchor="middle">Never: open terraform.tfstate in an editor and change an id by hand</text>
+
+        <text class="w3cN" x="30" y="356">Blocks live in code and go through review; state mv and state rm act at once, with a backup.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - every fix here changes what Terraform remembers, and none of them touches the real object</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>Drift and refresh-only plans<span class="mini">2 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Drift is the real world changing without Terraform: a console edit, a hotfix script, an expired object. A normal plan refreshes and then proposes undoing the drift. <code>terraform plan -refresh-only</code>, available since v0.15.4, does only the first half: it "creates a plan whose goal is only to update the Terraform state and any root module output values." It shows you what changed outside, and lets you decide whether to accept it into the record or overwrite it.</p>
+        <p>One lesson from the real run: the provider decides how drift reads. Someone appended a line to the raw zone's file. Because <code>local_file</code> uses a hash of the content as its id, a changed file is, to this provider, a different object, so refresh-only reports the original as deleted:</p>
+        <div class="prompt-box good"><span class="label">★ Real run · plan -refresh-only after a hand edit (trimmed)</span>$ echo "edited in the console" &gt;&gt; lake/larkspur-dev-raw/ZONE.txt
+$ terraform plan -refresh-only
+...
+Note: Objects have changed outside of Terraform
+
+Terraform detected the following changes made outside of Terraform since the
+last "terraform apply" which may have affected this plan:
+
+  # local_file.zone["raw"] has been deleted
+  - resource "local_file" "zone" {
+...
+This is a refresh-only plan, so Terraform will not take any actions to undo
+these. If you were expecting these changes then you can apply this plan to
+record the updated values in the Terraform state without changing any remote
+objects.</div>
+        <p>A cloud bucket whose tags changed would instead show an in-place difference. Read drift reports in the provider's terms, not in your expectation of them.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>moved, import, removed, state mv and rm<span class="mini">4 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p><strong>moved</strong> (Terraform 1.1.0) records a rename in code: "Use this block to programmatically change the address of a resource." The object stays where it is; only its address in the ledger changes, and "Terraform does not destroy the resource during the Terraform run."</p>
+        <p><strong>import</strong> (1.5.0) adopts an object that exists but is not in state: you write an <code>import</code> block with the target address and the object's id, and the plan shows it will be imported. <code>terraform plan -generate-config-out=PATH</code> can even write the resource block for you, though the plan docs still mark that flag experimental. Since 1.7.0 an import block can use <code>for_each</code> to adopt many instances at once.</p>
+        <p><strong>removed</strong> (1.7.0) records that a resource left the config. By default Terraform then destroys the object; with <code>lifecycle { destroy = false }</code> it removes it "from state without destroying the actual resource". <code>destroy</code> is the only lifecycle argument a removed block accepts.</p>
+        <div class="prompt-box good"><span class="label">Sketch · a removed block that keeps the object (not run)</span>removed {
+  from = local_file.lake_zone
+
+  lifecycle {
+    destroy = false
+  }
+}</div>
+        <p><strong>terraform state mv</strong> "changes bindings in Terraform state so that existing remote objects bind to new resource instances", and <strong>terraform state rm</strong> makes Terraform forget an object without touching it. They do the same jobs as moved and removed, but immediately, from one person's terminal, with no plan and no review. Prefer the blocks for anything a team shares; keep the commands for one-off repairs, and know that each one writes a backup first.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>Never hand-edit state<span class="mini">2 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>HashiCorp says it three ways. The state page: "Do not directly edit this file." The state command page: use the <code>terraform state</code> commands "to modify the Terraform state instead modifying the state directly." And the state-in-CLI page explains the risk: "Modifying state data outside of normal <code>terraform plan</code> or <code>terraform apply</code> operations can cause Terraform to lose track" of the objects it manages.</p>
+        <p>The danger is that a hand edit is the one change with no safety net. It skips the plan that shows you the consequence, skips the backup the commands write, skips the lock if you edit a local copy of a remote state, and skips review. Every break on this page has a tool that does the same job with those protections intact. If you ever think you need a text editor, write down which box moved and look at the decision tree again.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>The tidy-up rename.</strong> A familiar pattern: an engineer renames resources in a clean-up pull request so the names match the team's new convention. The code diff looks cosmetic. The plan, if anyone reads it, says every renamed object will be destroyed and created again, "because" the old address "is not in configuration". For a storage zone that means an empty new zone. The build-along reproduces exactly this, and one moved block turns it into a plan that changes nothing.</p>
+    </div>
+  </section>
+
+  <section class="section" id="demo-1">
+    <div class="section-kicker">
+      <span class="klabel">Build-along</span>
+      <h2>Break it three ways, fix it</h2>
+      <span class="tag demo">★ 22 min · everyone builds</span>
+    </div>
+    <p class="lede">Priya wants her team to have broken state on purpose, on a laptop, before it ever breaks for real. You will build three dev lake zones, then drift one, rename all three, lose a state file and contend for a lock, fixing each break with the matching tool. Everything uses <code>hashicorp/local</code>, <code>hashicorp/random</code> and the built-in <code>terraform_data</code>, and works the same with tofu. Every output below was really run with Terraform 1.17.1; your ids, hashes, lock IDs and times will differ.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 336" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Three rows, each a break and its fix. Lost: the state file is deleted and plan wants 1 to add for an object that already exists; the fix is an import block, and apply reports Resources: 1 imported. Drifted: the raw zone file is edited by hand and refresh-only says it has been deleted; the fix is to read the refresh-only plan, then apply, which plans 1 to add and puts the file back. Renamed: zone becomes lake_zone with no moved block and the plan is 3 to add, 0 to change, 3 to destroy; the fix is a moved block and the plan is 0 to add, 0 to change, 0 to destroy.">
+        <defs>
+          <filter id="w3dSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="67" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <marker id="w3dAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w3dAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w3dH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w3dL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w3dS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w3dB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w3dR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w3dV { font: 800 16px Inter, sans-serif; fill: #4A2478; }
+          .w3dA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w3dN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w3dH" x="30" y="26">THREE BREAKS, THREE FIXES: BEFORE AND AFTER, FROM THE REAL RUNS</text>
+        <text class="w3dA" x="320" y="48" text-anchor="middle">THE BREAK</text>
+        <text class="w3dA" x="700" y="48" text-anchor="middle">THE FIX</text>
+
+        <g filter="url(#w3dSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="160" y="56" width="320" height="70" rx="8" transform="rotate(-0.6 320 91)" fill="#FEF2F2" stroke="#FCA5A5"/>
+          <rect x="160" y="146" width="320" height="70" rx="8" transform="rotate(0.5 320 181)" fill="#FFFFFF"/>
+          <rect x="160" y="236" width="320" height="70" rx="8" transform="rotate(-0.4 320 271)" fill="#FEF2F2" stroke="#FCA5A5"/>
+          <rect x="540" y="56" width="320" height="70" rx="8" transform="rotate(0.5 700 91)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="540" y="146" width="320" height="70" rx="8" transform="rotate(-0.6 700 181)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="540" y="236" width="320" height="70" rx="8" transform="rotate(0.4 700 271)" fill="#E3F3F1" stroke="#0F766E"/>
+          <path d="M486 91 L534 91" stroke="#0F766E" marker-end="url(#w3dAt)"/>
+          <path d="M486 181 L534 181" stroke="#0F766E" marker-end="url(#w3dAt)"/>
+          <path d="M486 271 L534 271" stroke="#0F766E" marker-end="url(#w3dAt)"/>
+        </g>
+
+        <text class="w3dV" x="36" y="96">LOST</text>
+        <text class="w3dV" x="36" y="186">DRIFTED</text>
+        <text class="w3dV" x="36" y="276">RENAMED</text>
+        <text class="w3dL" x="176" y="84">terraform.tfstate deleted</text>
+        <text class="w3dR" x="176" y="104">plan: 1 to add, for an object that exists</text>
+        <text class="w3dL" x="176" y="174">raw ZONE.txt edited by hand</text>
+        <text class="w3dS" x="176" y="194">refresh-only: "has been deleted"</text>
+        <text class="w3dL" x="176" y="264">zone renamed lake_zone, no moved block</text>
+        <text class="w3dR" x="176" y="284">Plan: 3 to add, 0 to change, 3 to destroy.</text>
+        <text class="w3dL" x="556" y="84">import block, id = BNLpvQ</text>
+        <text class="w3dB" x="556" y="104">Resources: 1 imported</text>
+        <text class="w3dL" x="556" y="174">read it, then plan and apply</text>
+        <text class="w3dB" x="556" y="194">Plan: 1 to add, the file comes back</text>
+        <text class="w3dL" x="556" y="264">moved block, zone to lake_zone</text>
+        <text class="w3dB" x="556" y="284">Plan: 0 to add, 0 to change, 0 to destroy.</text>
+
+        <text class="w3dN" x="30" y="328">Red marks a break that would destroy or duplicate a real object if applied as planned.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - each fix changes the record to match reality; none of them recreates the object it repairs</figcaption>
+    </figure>
+
+    <div class="steps">
+      <div class="step">
+        <p><strong>Apply three zones and read the ledger.</strong> In a new folder, save this as <code>main.tf</code>, run <code>terraform init</code> and <code>terraform apply -auto-approve</code>, then list and show the state.</p>
+        <div class="prompt-box good"><span class="label">★ Step 1a · main.tf</span>terraform {
+  required_providers {
+    local = { source = "hashicorp/local", version = "~&gt; 2.5" }
+  }
+}
+
+variable "zones" {
+  type    = set(string)
+  default = ["raw", "curated", "serving"]
+}
+
+resource "local_file" "zone" {
+  for_each = var.zones
+  filename = "${path.module}/lake/larkspur-dev-${each.key}/ZONE.txt"
+  content  = "zone=${each.key} env=dev\n"
+}</div>
+        <div class="prompt-box good"><span class="label">★ Step 1b · apply, state list, state show (trimmed)</span>...
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+$ terraform state list
+local_file.zone["curated"]
+local_file.zone["raw"]
+local_file.zone["serving"]
+$ terraform state show local_file.zone["raw"]
+# local_file.zone["raw"]:
+resource "local_file" "zone" {
+    content              = &lt;&lt;-EOT
+        zone=raw env=dev
+    EOT
+...
+    content_sha1         = "2d18145fe7adc7af527ec22fec11794e1716e524"
+...
+    filename             = "./lake/larkspur-dev-raw/ZONE.txt"
+    id                   = "2d18145fe7adc7af527ec22fec11794e1716e524"
+}</div>
+      </div>
+      <div class="step">
+        <p><strong>Drift: edit a zone by hand.</strong> Append a line to the raw zone's file, as a console edit would. Run a refresh-only plan to see what changed outside, then a normal plan to see what Terraform would do about it. The normal plan proposes putting the file back; apply it.</p>
+        <div class="prompt-box good"><span class="label">★ Step 2 · refresh-only, then plan (trimmed)</span>$ echo "edited in the console" &gt;&gt; lake/larkspur-dev-raw/ZONE.txt
+$ terraform plan -refresh-only
+...
+  # local_file.zone["raw"] has been deleted
+  - resource "local_file" "zone" {
+      - content              = &lt;&lt;-EOT
+            zone=raw env=dev
+        EOT -&gt; null
+...
+This is a refresh-only plan, so Terraform will not take any actions to undo
+these. If you were expecting these changes then you can apply this plan to
+record the updated values in the Terraform state without changing any remote
+objects.
+...
+$ terraform plan
+...
+  # local_file.zone["raw"] will be created
+  + resource "local_file" "zone" {
+      + content              = &lt;&lt;-EOT
+            zone=raw env=dev
+        EOT
+      + filename             = "./lake/larkspur-dev-raw/ZONE.txt"
+      + id                   = (known after apply)
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.</div>
+        <div class="prompt-box good"><span class="label">★ Step 2b · terraform apply -auto-approve (trimmed)</span>...
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.</div>
+      </div>
+      <div class="step">
+        <p><strong>Rename without a moved block.</strong> Change <code>resource "local_file" "zone"</code> to <code>resource "local_file" "lake_zone"</code> and plan. Nothing about the files changed, yet Terraform sees three new addresses with no state and three recorded addresses with no config. Do not apply this. The lines below are the plan's headings, filtered for length.</p>
+        <div class="prompt-box good"><span class="label">★ Step 3 · the tidy-up rename (trimmed)</span># renamed local_file.zone -&gt; local_file.lake_zone, no moved block
+$ terraform plan
+  # local_file.lake_zone["curated"] will be created
+  # local_file.lake_zone["raw"] will be created
+  # local_file.lake_zone["serving"] will be created
+  # local_file.zone["curated"] will be destroyed
+  # (because local_file.zone is not in configuration)
+  # local_file.zone["raw"] will be destroyed
+  # (because local_file.zone is not in configuration)
+  # local_file.zone["serving"] will be destroyed
+  # (because local_file.zone is not in configuration)
+Plan: 3 to add, 0 to change, 3 to destroy.</div>
+      </div>
+      <div class="step">
+        <p><strong>Add the moved block.</strong> Append it to <code>main.tf</code> under the renamed resource, plan, then apply. The same rename now changes only the ledger.</p>
+        <div class="prompt-box good"><span class="label">★ Step 4a · main.tf, renamed with a moved block</span>resource "local_file" "lake_zone" {
+  for_each = var.zones
+  filename = "${path.module}/lake/larkspur-dev-${each.key}/ZONE.txt"
+  content  = "zone=${each.key} env=dev\n"
+}
+
+moved {
+  from = local_file.zone
+  to   = local_file.lake_zone
+}</div>
+        <div class="prompt-box good"><span class="label">★ Step 4b · plan and apply (trimmed)</span># added moved block
+$ terraform plan
+  # local_file.zone["curated"] has moved to local_file.lake_zone["curated"]
+        # (10 unchanged attributes hidden)
+  # local_file.zone["raw"] has moved to local_file.lake_zone["raw"]
+        # (10 unchanged attributes hidden)
+  # local_file.zone["serving"] has moved to local_file.lake_zone["serving"]
+        # (10 unchanged attributes hidden)
+Plan: 0 to add, 0 to change, 0 to destroy.
+...
+Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</div>
+      </div>
+      <div class="step">
+        <p><strong>state mv and state rm, by hand.</strong> Move the serving zone's binding to an address the config does not have, then remove it from state. The file on disk is untouched; in the real run a listing of <code>lake/</code> still showed all three zone folders. Terraform has simply forgotten the object, so the next plan wants to create something that already exists.</p>
+        <div class="prompt-box good"><span class="label">★ Step 5 · move, forget, plan (trimmed)</span>$ terraform state list
+local_file.lake_zone["curated"]
+local_file.lake_zone["raw"]
+local_file.lake_zone["serving"]
+$ terraform state mv local_file.lake_zone["serving"] local_file.serving_zone_old
+Move "local_file.lake_zone[\"serving\"]" to "local_file.serving_zone_old"
+Successfully moved 1 object(s).
+$ terraform state rm local_file.serving_zone_old
+Removed local_file.serving_zone_old
+Successfully removed 1 resource instance(s).
+...
+$ terraform plan
+  # local_file.lake_zone["serving"] will be created
+Plan: 1 to add, 0 to change, 0 to destroy.</div>
+      </div>
+      <div class="step">
+        <p><strong>Lose the state, then import.</strong> In a second new folder, apply a single <code>random_id</code> that stands in for a lake suffix, note its id, then delete both state files. The object still exists, but the plan wants to create it again. Add an <code>import</code> block with the id and plan: Terraform adopts the object instead. Use your own id from the apply output; <code>BNLpvQ</code> was the real run's.</p>
+        <div class="prompt-box good"><span class="label">★ Step 6a · apply, lose the state, plan</span>random_id.lake_suffix: Creation complete after 0s [id=BNLpvQ]
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+# suffix b64_url = BNLpvQ
+$ rm terraform.tfstate terraform.tfstate.backup   # the state is lost
+$ terraform plan
+  # random_id.lake_suffix will be created
+Plan: 1 to add, 0 to change, 0 to destroy.</div>
+        <div class="prompt-box good"><span class="label">★ Step 6b · main.tf with the import block</span>resource "random_id" "lake_suffix" {
+  byte_length = 4
+}
+
+import {
+  to = random_id.lake_suffix
+  id = "BNLpvQ"
+}</div>
+        <div class="prompt-box good"><span class="label">★ Step 6c · plan, then terraform apply -auto-approve (trimmed)</span>$ terraform plan
+random_id.lake_suffix: Preparing import... [id=BNLpvQ]
+random_id.lake_suffix: Refreshing state... [id=BNLpvQ]
+Terraform will perform the following actions:
+  # random_id.lake_suffix will be imported
+    resource "random_id" "lake_suffix" {
+        b64_std     = "BNLpvQ=="
+        b64_url     = "BNLpvQ"
+        byte_length = 4
+        dec         = "80931261"
+        hex         = "04d2e9bd"
+        id          = "BNLpvQ"
+    }
+Plan: 1 to import, 0 to add, 0 to change, 0 to destroy.
+...
+random_id.lake_suffix: Importing... [id=BNLpvQ]
+random_id.lake_suffix: Import complete [id=BNLpvQ]
+Apply complete! Resources: 1 imported, 0 added, 0 changed, 0 destroyed.</div>
+        <p>Once the import has applied, the import block has done its job; it records intent in code, which is why reviewers can see the adoption in a pull request.</p>
+      </div>
+      <div class="step">
+        <p><strong>Contend for the lock.</strong> In a third folder, configure the local backend with an explicit path and a slow stand-in resource: a <code>terraform_data</code> whose provisioner sleeps for six seconds. Run <code>terraform init</code>, start <code>terraform apply -auto-approve</code> in terminal 1, and while it sleeps run <code>terraform plan</code> in terminal 2.</p>
+        <div class="prompt-box good"><span class="label">★ Step 7a · main.tf with a local backend</span>terraform {
+  backend "local" {
+    path = "state/larkspur-dev.tfstate"
+  }
+}
+
+resource "terraform_data" "slow_load" {
+  input = "nightly"
+  provisioner "local-exec" {
+    command = "sleep 6"
+  }
+}</div>
+        <div class="prompt-box good"><span class="label">★ Step 7b · init, then two terminals (trimmed)</span>$ terraform init
+Initializing the backend...
+Successfully configured the backend "local"! Terraform will automatically
+use this backend unless the backend configuration changes.
+Initializing provider plugins...
+# a teammate runs plan while the first apply is still running
+$ terraform plan
+
+Error: Error acquiring the state lock
+
+Error message: resource temporarily unavailable
+Lock Info:
+  ID:        a57df1fa-e9d3-5082-3d28-df142f0623c2
+  Path:      state/larkspur-dev.tfstate
+  Operation: OperationTypeApply
+  Who:       &lt;user&gt;@&lt;host&gt;
+  Version:   1.17.1
+  Created:   2026-11-03 04:11:24.330202 +0000 UTC
+...
+Terraform acquires a state lock to protect the state from being written
+by multiple users at the same time. Please resolve the issue above and try
+again. For most commands, you can disable locking with the "-lock=false"
+flag, but this is not recommended.
+...
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.</div>
+        <p>Terminal 2 exits with an error and changes nothing; terminal 1 finishes its apply. The <code>Who</code> line shows a real user and host on your machine.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <p><strong>Keep the first folder.</strong> Session 4 turns Larkspur's zones into a reusable <code>data-zone</code> module for dev and prod, and moving resources into a module is one more rename that a moved block handles.</p>
+    </div>
+  </section>
+
+  <section class="section" id="exercise">
+    <div class="section-kicker">
+      <span class="klabel">Homework</span>
+      <h2>Before session 4</h2>
+      <span class="tag exercise">30 min</span>
+    </div>
+    <ol>
+      <li><strong>Find your secret.</strong> In your session 2 folder, run <code>grep -c</code> for the warehouse password's value in <code>terraform.tfstate</code> and confirm it is there. HashiCorp's docs say saved plan files carry it too, so treat <code>*.tfplan</code> files the same way. Write one sentence on where your team's real state files live and who can read them.</li>
+      <li><strong>Accept the drift instead.</strong> Repeat step 2, but this time run <code>terraform apply -refresh-only</code> and approve it. Run <code>terraform state list</code> and a normal plan: what did accepting the drift do to the ledger, and what does the next plan want?</li>
+      <li><strong>Remove without destroying.</strong> In the first folder, delete the <code>lake_zone</code> resource block and add a <code>removed</code> block for it with <code>destroy = false</code>. Plan and apply, then check that the files are still on disk and that <code>terraform state list</code> is empty.</li>
+      <li><strong>Generate config for an import.</strong> In the import folder, delete the <code>random_id</code> resource block and the state, keep only the <code>import</code> block, and run <code>terraform plan -generate-config-out=generated.tf</code>. Read what Terraform wrote, and remember the flag is still marked experimental.</li>
+    </ol>
+  </section>
+
+  <section class="section" id="quiz">
+    <div class="section-kicker">
+      <span class="klabel">Check yourself</span>
+      <h2>Three questions</h2>
+    </div>
+    <p>Clear all three and session 3 gets stamped in your passport.</p>
+
+    <div class="quiz-q" data-answer="1">
+      <p class="qtext">1 · You rename <code>local_file.zone</code> to <code>local_file.lake_zone</code> and change nothing else. There is no moved block. What does the plan propose?</p>
+      <button class="qopt" type="button">A · No changes, because the files and their content are identical</button>
+      <button class="qopt" type="button">B · Create three new instances and destroy the three old ones, "because local_file.zone is not in configuration"</button>
+      <button class="qopt" type="button">C · Three in-place updates that change only the address</button>
+      <button class="qopt" type="button">D · An error asking you to run terraform state mv first</button>
+      <p class="qwhy">Terraform matches config to state by address, not by content. The new addresses have no state, so they are created; the old ones have no config, so they are destroyed. The real run planned "3 to add, 0 to change, 3 to destroy". A moved block turns the same rename into "0 to add, 0 to change, 0 to destroy".</p>
+    </div>
+
+    <div class="quiz-q" data-answer="3">
+      <p class="qtext">2 · Larkspur marks its warehouse password variable and output <code>sensitive = true</code>. Where can the value still be read in plain text?</p>
+      <button class="qopt" type="button">A · Nowhere; sensitive encrypts the value everywhere</button>
+      <button class="qopt" type="button">B · Only in the plan printed on screen</button>
+      <button class="qopt" type="button">C · Only in the config file, never in anything Terraform writes</button>
+      <button class="qopt" type="button">D · In the state file and in saved plan files; sensitive only hides it from CLI output</button>
+      <p class="qwhy">HashiCorp's docs say Terraform "stores values with the sensitive argument in both state and plan files", and that state is a plaintext file. Session 2's grep found the value once in state. Protect state like the secret: an access-controlled backend, encryption at rest, never in version control.</p>
+    </div>
+
+    <div class="quiz-q" data-answer="2">
+      <p class="qtext">3 · The state file was deleted, but the real object still exists, and the plan now wants to create it again. What is the right fix?</p>
+      <button class="qopt" type="button">A · Apply the plan; Terraform will notice the duplicate and skip it</button>
+      <button class="qopt" type="button">B · Recreate terraform.tfstate by hand in a text editor with the object's id</button>
+      <button class="qopt" type="button">C · Add an import block with the object's address and id, plan, and apply</button>
+      <button class="qopt" type="button">D · Run terraform state rm on the address</button>
+      <p class="qwhy">An import block adopts an existing object into state: the real run planned "1 to import, 0 to add, 0 to change, 0 to destroy" and applied "Resources: 1 imported". Applying the original plan would try to create a second object, hand-editing state is the one repair with no plan, backup or review, and state rm removes from state something that is not there.</p>
+    </div>
+
+    <p class="quiz-score"></p>
+  </section>
+
+  <section class="section" id="official">
+    <div class="section-kicker">
+      <span class="klabel">Sources covered</span>
+      <h2>What this session teaches, and where it came from</h2>
+    </div>
+    <div class="covered">
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform Associate (004) exam content list</span><span class="note">Objectives 2d (how Terraform uses state), 6a, 6b, 6c, 6d (local backend, locking, remote backend block, drift), 7a, 7b (import, inspecting state) and the state part of 4h (sensitive data), read at developer.hashicorp.com</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">HashiCorp docs: state, sensitive data, state command, state mv</span><span class="note">Default terraform.tfstate and backup, "Do not directly edit this file", backups cannot be disabled, plaintext secrets in state and plan files, encryption depends on backend, read at source</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">HashiCorp docs: state locking, local backend, S3 backend</span><span class="note">Not all backends lock, force-unlock warning, local backend locks with system APIs, use_lockfile opt-in, DynamoDB locking deprecated and not yet removed, read at source</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">HashiCorp docs: moved, import and removed blocks, plan -refresh-only</span><span class="note">Behaviour of each block, destroy = false, -generate-config-out marked experimental, refresh-only from v0.15.4, read at source</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform and OpenTofu CHANGELOGs</span><span class="note">moved 1.1.0, import block 1.5.0, removed block and import for_each 1.7.0, S3 native locking 1.10.0 and GA 1.11.0, ephemeral values 1.10.0, write-only attributes 1.11.0; OpenTofu state encryption 1.7.0</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform 1.17.1 with hashicorp/local and hashicorp/random</span><span class="note">Every command output on this page, really run; ids, hashes, lock IDs and times will differ on your machine, and user@host was replaced with a placeholder</span></div>
+      <div class="covered-row"><span class="status pill light">◐</span><span class="name">Larkspur Freight, Priya and the S3 bucket name</span><span class="note">Constructed for teaching; the S3 backend block is shown, not applied, and no number about Larkspur is a measurement</span></div>
+    </div>
+    <p class="mono" style="margin-top:14px">Every fact on this page, and its verification tier, is recorded in the course's source map.</p>
+  </section>
+
+  <section class="cheat" id="cheatsheet">
+    <h3>Session 3 cheat sheet <span>· pin this</span></h3>
+    <div class="grid-2">
+      <div class="cheat-item"><b>What state is</b><span>A ledger binding each address to one real object id. Default <code>terraform.tfstate</code> plus <code>.backup</code>. Never edit it by hand.</span></div>
+      <div class="cheat-item"><b>Secrets</b><span><code>sensitive</code> hides values on screen only. State and saved plans hold them in plain text: lock down the backend.</span></div>
+      <div class="cheat-item"><b>Locking</b><span>Local backend locks on disk. Not every backend locks. S3: <code>use_lockfile = true</code>, no DynamoDB needed since 1.11.</span></div>
+      <div class="cheat-item"><b>Drift</b><span><code>plan -refresh-only</code> shows what changed outside; the provider decides whether it reads as an update or a delete.</span></div>
+      <div class="cheat-item"><b>Repair blocks</b><span>Renamed: <code>moved</code>. Exists, not in state: <code>import</code>. Keep but forget: <code>removed</code> with <code>destroy = false</code>.</span></div>
+      <div class="cheat-item"><b>Read-only first</b><span><code>state list</code> and <code>state show</code> any time; <code>state mv</code> and <code>state rm</code> act at once, so prefer the reviewed blocks.</span></div>
+    </div>
+  </section>
+
+  <div class="callout next">
+    <span class="nx-pill">Next session</span>
+    <p>Copying the zone blocks once more for prod would leave two copies to keep in step. Session 4 packages them as Larkspur's <code>data-zone</code> module, calls it once per environment, pins provider versions with constraints and the lock file, and shows the same module written for four real cloud providers, shown and not applied.</p>
+  </div>
+
+  <footer class="pagefoot">
+    <span>Session 3 of 6 · learn-terraform-with-phoebe · by Phoebe Fu &nbsp;·&nbsp; 📚 <a href="https://phoebefu6.github.io/learn-with-phoebe/">Learn with Phoebe ↗</a></span>
+    <span><a href="02-the-hcl-language.html">← Prev: The HCL language</a> &nbsp;·&nbsp; <a href="04-modules-and-versions.html">Next: Modules and versions →</a></span>
+  </footer>
+
+</main>
+
+<script src="../assets/app.js?v=1"></script>
+</body>
+</html>

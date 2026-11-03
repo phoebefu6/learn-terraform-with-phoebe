@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- social:start -->
+<meta name="description" content="Session 4 of 6. Modules and versions: a module as a folder with a contract, variable scope, version constraints and the ~> rule, the dependency lock file, and one data-zone module run for dev and prod on your laptop, then shown against AWS, Google Cloud, Snowflake and Databricks.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Learn with Phoebe">
+<meta property="og:title" content="Modules and versions - learn terraform with phoebe">
+<meta property="og:description" content="Session 4 of 6. One data-zone module, two environments, and the constraints and lock file that keep every machine on the same provider.">
+<meta property="og:url" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/courses/04-modules-and-versions.html">
+<meta property="og:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Modules and versions - learn terraform with phoebe">
+<meta name="twitter:description" content="Session 4 of 6. A module as a contract, the ~> rule, and what the lock file does and does not pin.">
+<meta name="twitter:image" content="https://phoebefu6.github.io/learn-terraform-with-phoebe/assets/og-cover.png">
+<!-- social:end -->
+<title>Session 4 · Modules and versions - learn terraform with phoebe</title>
+<link rel="stylesheet" href="../assets/style.css?v=2">
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">learn-terraform-with-phoebe</a> / Session 4 of 6</span>
+    <button class="btn" id="toggle-all" type="button">Expand all</button>
+    <button class="btn primary" id="zoom-toggle" type="button">Projector zoom: off</button>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="eyebrow">Learn Terraform with Phoebe · Session 4 of 6</div>
+    <h1><span class="accent">Modules</span> and versions</h1>
+    <p class="sub">By now Larkspur has three lake zones for dev. Prod needs the same three, and the fastest way to get them is to copy the file and change a word, which is how two environments quietly stop matching. A module is the alternative: one folder that describes a zone once, called as many times as you need with different inputs. Tonight you write that module, call it for dev and prod, and learn the two things that keep it stable across laptops and pipelines: version constraints, and the lock file that records what they resolved to.</p>
+    <div class="chip-row">
+      <span class="chip level">🟠 Deeper</span>
+      <span class="chip audience">Data engineers; leaders read Part 3</span>
+      <span class="chip audience">terraform or tofu CLI, no cloud account</span>
+      <span class="chip time">45 min</span>
+    </div>
+    <div class="agenda">
+      <span class="a1" style="flex:1">0-3 · Welcome</span>
+      <span class="a2" style="flex:4">3-18 · Modules, constraints, the lock file</span>
+      <span class="a3" style="flex:5">18-40 · Build-along: one module, two environments</span>
+      <span class="a4" style="flex:1">40-45 · Q&amp;A</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="section" id="intro">
+    <div class="section-kicker">
+      <span class="klabel">Part 0</span>
+      <h2>Where we start</h2>
+    </div>
+    <p class="lede">The running case is constructed. Larkspur Freight is an invented mid-size logistics company, and Priya, its data lead, is writing its first data platform as code. Sessions 2 and 3 gave her raw, curated and serving zones and a state file she trusts. Her next request sounds simple: "prod should look exactly like dev, except where we say it should not." Tonight she gets that by writing the zone once, as a module, and calling it six times. Everything still runs locally with stand-in files, so there is no cloud account and no bill.</p>
+
+    <div class="legend">
+      <span class="pill">🎫 Clear all three quiz questions to stamp your passport</span>
+      <span class="pill">Live = presented in the 45 minutes</span>
+      <span class="pill">Self-study = the full depth, after class</span>
+      <span class="pill">★ Build-along = run it yourself</span>
+    </div>
+
+    <div class="callout win">
+      <p><strong>★ What you walk out with tonight.</strong> A working <code>data-zone</code> module with a clear contract, a root config that builds six zones for dev and prod from it, the ability to read any version constraint at a glance, and a precise answer to the question reviewers ask most about lock files: what exactly does it pin?</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-1">
+    <div class="section-kicker">
+      <span class="klabel">Part 1 · covers module structure, inputs, outputs and variable scope</span>
+      <h2>A module is a folder with a contract</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">Every Terraform directory is already a module: the one you run commands in is the root module. A child module is any other folder of <code>.tf</code> files that the root calls with a <code>module</code> block. What makes it reusable is the boundary. Values go in through variables, values come out through outputs, and nothing else crosses in either direction.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 376" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The root module holds locals.zones with raw 30, curated 365 and serving 90, and calls module.dev_zone and module.prod_zone with for_each. Three inputs, env, zone and retention_days, pass through holes in the child module's boundary into modules/data-zone, which builds local_file.marker, addressed in state as module.dev_zone raw local_file.marker. Two outputs leave through holes in the bottom edge: name flows back to the root's output zone_names; path is available but the root does not read it.">
+        <defs>
+          <filter id="w4aSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="13" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w4aHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w4aAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+          <marker id="w4aAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w4aH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w4aL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w4aS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w4aB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w4aA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w4aN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w4aH" x="30" y="26">THE MODULE BOUNDARY: VALUES IN, OUTPUTS OUT, NOTHING ELSE CROSSES</text>
+
+        <g filter="url(#w4aSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="30" y="50" width="250" height="210" rx="10" transform="rotate(-0.5 155 155)" fill="#FFFFFF"/>
+          <rect x="420" y="50" width="430" height="230" rx="12" transform="rotate(0.4 635 165)" fill="#F4EEFB" stroke="#7B42BC"/>
+          <path d="M286 110 L418 110" marker-end="url(#w4aAr)"/>
+          <path d="M286 150 L418 150" marker-end="url(#w4aAr)"/>
+          <path d="M286 190 L418 190" marker-end="url(#w4aAr)"/>
+          <rect x="426" y="102" width="20" height="16" rx="3" transform="rotate(-2 436 110)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="426" y="142" width="20" height="16" rx="3" transform="rotate(2 436 150)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="426" y="182" width="20" height="16" rx="3" transform="rotate(-1.5 436 190)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="620" y="96" width="200" height="90" rx="8" transform="rotate(-1 720 141)" fill="url(#w4aHc)"/>
+          <path d="M566 110 L614 112" marker-end="url(#w4aAr)"/>
+          <path d="M566 150 L614 146" marker-end="url(#w4aAr)"/>
+          <path d="M566 190 L614 178" marker-end="url(#w4aAr)"/>
+          <rect x="480" y="258" width="20" height="16" rx="3" transform="rotate(2 490 266)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="790" y="258" width="20" height="16" rx="3" transform="rotate(-2 800 266)" fill="#E3F3F1" stroke="#0F766E"/>
+          <path d="M490 278 L490 322 L290 322" stroke="#0F766E" marker-end="url(#w4aAt)"/>
+          <path d="M800 278 L800 312" stroke-dasharray="4 4"/>
+          <rect x="30" y="300" width="250" height="44" rx="8" transform="rotate(0.6 155 322)" fill="#FFFFFF"/>
+        </g>
+
+        <text class="w4aA" x="155" y="72" text-anchor="middle">ROOT MODULE · main.tf</text>
+        <text class="w4aL" x="50" y="100">locals.zones</text>
+        <text class="w4aS" x="60" y="118">raw = 30</text>
+        <text class="w4aS" x="60" y="134">curated = 365</text>
+        <text class="w4aS" x="60" y="150">serving = 90</text>
+        <text class="w4aL" x="50" y="184">module.dev_zone</text>
+        <text class="w4aS" x="50" y="200">for_each over 3 zones</text>
+        <text class="w4aL" x="50" y="226">module.prod_zone</text>
+        <text class="w4aS" x="50" y="242">same module, env = prod</text>
+        <text class="w4aB" x="345" y="103" text-anchor="middle">env</text>
+        <text class="w4aB" x="345" y="143" text-anchor="middle">zone</text>
+        <text class="w4aB" x="345" y="183" text-anchor="middle">retention_days</text>
+        <text class="w4aA" x="440" y="74">CHILD MODULE · modules/data-zone</text>
+        <text class="w4aS" x="454" y="114">var.env</text>
+        <text class="w4aS" x="454" y="154">var.zone</text>
+        <text class="w4aS" x="454" y="194">var.retention_days</text>
+        <text class="w4aL" x="720" y="208" text-anchor="middle">local_file.marker</text>
+        <text class="w4aS" x="720" y="224" text-anchor="middle">lake/larkspur-dev-raw/ZONE.txt</text>
+        <text class="w4aB" x="635" y="252" text-anchor="middle">module.dev_zone["raw"].local_file.marker</text>
+        <text class="w4aS" x="500" y="310">name</text>
+        <text class="w4aS" x="790" y="330" text-anchor="end">path (root does not read it)</text>
+        <text class="w4aL" x="155" y="320" text-anchor="middle">output zone_names</text>
+        <text class="w4aS" x="155" y="336" text-anchor="middle">six names, dev then prod</text>
+
+        <text class="w4aN" x="30" y="364">The module sees only its three variables. The root sees only name and path. Everything else stays inside.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - the teal holes are the whole contract; anything a caller needs must pass through one of them</figcaption>
+    </figure>
+
+    <details class="card" open>
+      <summary><span class="mode live">Live</span>A module is a folder with a contract<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>By convention a module folder holds <code>variables.tf</code> (its inputs), <code>main.tf</code> (what it builds), <code>outputs.tf</code> (what it hands back) and a <code>README</code> that tells the next person what the inputs mean. Terraform does not care about the file names; people do, and a reviewer who knows where to look reviews faster.</p>
+        <p>Scope is strict in both directions. Inside <code>modules/data-zone</code>, the code can read <code>var.env</code>, <code>var.zone</code> and <code>var.retention_days</code>, and nothing from the root: not <code>local.zones</code>, not the other module call. The caller passes values in as arguments of the <code>module</code> block and reads values out as <code>module.dev_zone["raw"].name</code>. A local or a resource inside the module is invisible to the caller unless an output exposes it.</p>
+        <p>State, though, sees everything, with a longer address. The marker file for the dev raw zone lives at <code>module.dev_zone["raw"].local_file.marker</code>: module call, for_each key, then the resource address you already know from session 1.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>Composition over one giant module<span class="mini">4 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>The tempting design is one module called <code>platform</code> with forty inputs that builds everything. It is hard to read, hard to test, and every change to it touches everything that calls it. The steadier pattern is small modules that each do one job, a zone, a catalog, a grant, composed in a root config that wires their outputs to each other's inputs. HashiCorp's own advice on separating environments points the same way: reusable modules for the common elements, and a separate root configuration per deployment.</p>
+        <p>Small modules also shrink the blast radius of a change, a reviewer's first question in session 5: a change inside <code>data-zone</code> can only touch zones.</p>
+        <p>Modules come from more than local folders. A <code>source</code> can be a local path such as <code>./modules/data-zone</code>, or an address in a module registry. Only registry modules accept a <code>version</code> argument in the <code>module</code> block. A local path has no version: it is whatever is on disk in the same commit, which is exactly why Larkspur keeps its module in the same repository for now.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>The copy that drifted.</strong> A familiar pattern in data teams: the prod configuration started as a copy of dev, then each got its own fixes. A year later a retention rule exists in one and not the other, and nobody can say whether that was a decision. With one module and two calls, the only differences between environments are the arguments in the <code>module</code> blocks, and a reviewer can read all of them on one screen.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-2">
+    <div class="section-kicker">
+      <span class="klabel">Part 2 · covers version constraints and the dependency lock file</span>
+      <h2>Constraints say what is acceptable; the lock file says what was chosen</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">A version constraint is a promise about what you are willing to run. Each module states its own, the root states another, and <code>terraform init</code> has to find one release of each provider that satisfies all of them at once. It then writes the answer into <code>.terraform.lock.hcl</code>, so the next init, on your laptop or in a pipeline, makes the same choice.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A number line of hashicorp/local versions from 2.0 to 3.0 and beyond. The module's constraint, at least 2.4 and below 3.0, covers 2.4 to 3.0. The root's constraint, tilde-greater 2.5, covers 2.5 to 3.0. Their intersection, shown in teal, is at least 2.5 and below 3.0, which init prints as at least 2.4.0, tilde-greater 2.5, below 3.0.0. Version 2.9.1 is marked as chosen, the newest release inside. Everything from 3.0 up is excluded.">
+        <defs>
+          <filter id="w4bSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="29" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w4bHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w4bAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w4bH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w4bL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w4bS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w4bB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w4bR { font: 800 11px Inter, sans-serif; fill: #991B1B; }
+          .w4bN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w4bH" x="30" y="26">WHICH hashicorp/local RELEASES EACH CONSTRAINT ADMITS</text>
+
+        <g filter="url(#w4bSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="336" y="72" width="384" height="26" rx="6" transform="rotate(-0.4 528 85)" fill="#F4EEFB" stroke="#7B42BC"/>
+          <rect x="400" y="122" width="320" height="26" rx="6" transform="rotate(0.4 560 135)" fill="url(#w4bHc)" stroke="#7B42BC"/>
+          <rect x="400" y="172" width="320" height="26" rx="6" transform="rotate(-0.3 560 185)" fill="#E3F3F1" stroke="#0F766E"/>
+          <rect x="728" y="60" width="110" height="150" rx="8" transform="rotate(0.5 783 135)" fill="#FEF2F2" stroke="#FCA5A5"/>
+          <path d="M60 230 L850 230" marker-end="url(#w4bAr)"/>
+          <path d="M80 224 L80 236 M336 224 L336 236 M400 224 L400 236 M720 224 L720 236"/>
+          <path d="M660 66 L660 228" stroke="#0F766E" stroke-dasharray="5 4"/>
+        </g>
+
+        <text class="w4bL" x="320" y="90" text-anchor="end">module: &gt;= 2.4, &lt; 3.0</text>
+        <text class="w4bL" x="384" y="140" text-anchor="end">root: ~&gt; 2.5</text>
+        <text class="w4bB" x="384" y="190" text-anchor="end">init sees: &gt;= 2.4.0, ~&gt; 2.5, &lt; 3.0.0</text>
+        <text class="w4bB" x="660" y="56" text-anchor="middle">v2.9.1 chosen</text>
+        <text class="w4bR" x="783" y="130" text-anchor="middle">3.x excluded</text>
+        <text class="w4bR" x="783" y="146" text-anchor="middle">by both</text>
+        <text class="w4bS" x="80" y="252" text-anchor="middle">2.0</text>
+        <text class="w4bS" x="336" y="252" text-anchor="middle">2.4</text>
+        <text class="w4bS" x="400" y="252" text-anchor="middle">2.5</text>
+        <text class="w4bB" x="660" y="252" text-anchor="middle">2.9.1</text>
+        <text class="w4bS" x="720" y="252" text-anchor="middle">3.0</text>
+        <text class="w4bS" x="850" y="272" text-anchor="end">versions of hashicorp/local</text>
+
+        <text class="w4bN" x="30" y="304">Each caller adds a constraint. init intersects them all, then takes the newest release inside the overlap.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - the teal band is the only range every constraint accepts; ~&gt; 2.5 is what closes it below 3.0</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>Reading a constraint<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Seven operators cover every case. <code>=</code> allows one exact version and cannot be combined with other conditions. <code>!=</code> excludes one exact version. <code>&gt;</code> and <code>&gt;=</code> ask for newer, <code>&lt;</code> and <code>&lt;=</code> for older, and a comma means "and". The one worth memorising is <code>~&gt;</code>, which allows only the right-most version component to increment.</p>
+        <p>HashiCorp's own examples make it concrete. <code>~&gt; 1.0.4</code> allows 1.0.5 and 1.0.10 but not 1.1.0. <code>~&gt; 1.1</code> allows 1.2 and 1.10 but not 2.0. So the more digits you write, the tighter the range.</p>
+        <p>In tonight's build-along the module asks for <code>&gt;= 2.4, &lt; 3.0</code> and the root asks for <code>~&gt; 2.5</code>. init combines them into one line, <code>"&gt;= 2.4.0, ~&gt; 2.5, &lt; 3.0.0"</code>, and installs v2.9.1, the newest release that satisfies all three conditions. That line is printed by the real run in step 4.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>The lock file pins providers, not modules<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p><code>.terraform.lock.hcl</code> records, for each provider, the exact version init selected, the constraints it was selected against, and checksums of the package. The next init reuses that selection instead of looking for something newer, so every laptop and pipeline gets the same provider. HashiCorp's guidance is direct: include this file in your version control repository. Here is the real entry from tonight's run:</p>
+        <div class="prompt-box good"><span class="label">★ Real run · .terraform.lock.hcl (trimmed)</span># This file is maintained automatically by "terraform init".
+# Manual edits may be lost in future updates.
+
+provider "registry.terraform.io/hashicorp/local" {
+  version     = "2.9.1"
+  constraints = "&gt;= 2.4.0, ~&gt; 2.5, &lt; 3.0.0"
+  hashes = [
+    "h1:OZGJN0LSSat5QIxZPxDXtVr4XpHb2oG7cVKJhSqBFIE=",
+    "zh:25606c7a5e308144fb627f6e31611bb52ff72bb9ae2d27af39673ab1a6b3c1bf",
+...</div>
+        <p>Notice what is missing: there is no entry for <code>data-zone</code>. The docs say it plainly: the lock file tracks only provider dependencies, and Terraform does not remember version selections for remote modules. If you call a registry module, pin it with the <code>version</code> argument in the <code>module</code> block, because nothing else will. When you do want a newer provider inside your constraints, run <code>terraform init -upgrade</code> and review the lock file change in the pull request like any other change.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>When no version fits<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Constraints can contradict each other or the registry. Ask for a major version that does not exist and init stops before anything is created. This is the real error from a scratch config that asked for hashicorp/local <code>~&gt; 3.0</code>, when the newest release is in the 2.x line:</p>
+        <div class="prompt-box good"><span class="label">★ Real run · the impossible constraint</span>Error: Failed to query available provider packages
+
+Could not retrieve the list of available versions for provider
+hashicorp/local: no available releases match the given constraints ~&gt; 3.0</div>
+        <p>The same message appears when two modules want ranges that do not overlap, because init intersects before it searches. The error itself tells you the next move, <code>terraform providers</code>, which prints which module asked for what. Step 5 of the build-along shows that tree.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>The major release nobody chose.</strong> Provider majors arrive with real changes: hashicorp/aws 6.0.0 added a <code>region</code> argument to most resources, for example. A team whose config sets no upper bound, and whose lock file is not committed, picks up a new major the next time a fresh machine runs init, and the first sign is an unfamiliar plan. A <code>~&gt;</code> constraint plus a committed lock file turns that surprise into a deliberate pull request.</p>
+    </div>
+  </section>
+
+  <section class="section" id="part-3">
+    <div class="section-kicker">
+      <span class="klabel">Part 3 · covers the same module on real data platforms (shown, not applied)</span>
+      <h2>One zone interface, four platforms underneath</h2>
+      <span class="tag concept">5 min live</span>
+    </div>
+    <p class="lede">The <code>data-zone</code> module's contract, env and zone in, name out, says nothing about where a zone lives. Swap the resource inside and the same contract can create an object storage bucket, a warehouse database or a lakehouse catalog. What changes is the provider, its version, and which arguments force Terraform to destroy and recreate the object, which is the thing a data team most needs to know before wiring a module to data that matters.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 410" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The data-zone interface in the middle takes env, zone and retention_days and returns name and path. Four adapters hang below it. AWS: aws_s3_bucket from hashicorp/aws major 6, bucket forces a new resource, region argument since 6.0.0. Google Cloud: google_storage_bucket from hashicorp/google major 8, name and location are ForceNew. Snowflake: snowflake_database from snowflakedb/snowflake major 2, name must be unique in the account, force-new rules to check in the docs. Databricks: databricks_catalog from databricks/databricks major 1, storage_root forces a new resource.">
+        <defs>
+          <filter id="w4cSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="43" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w4cHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w4cAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#221A2E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w4cH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w4cL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w4cS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w4cB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w4cA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w4cN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w4cH" x="30" y="26">ONE MODULE INTERFACE, FOUR PROVIDERS UNDERNEATH (SHOWN, NOT APPLIED)</text>
+
+        <g filter="url(#w4cSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="320" y="60" width="240" height="110" rx="10" transform="rotate(-0.5 440 115)" fill="#E3F3F1" stroke="#0F766E"/>
+          <path d="M400 176 C330 200 160 210 125 244" marker-end="url(#w4cAr)"/>
+          <path d="M425 176 C400 205 350 220 340 244" marker-end="url(#w4cAr)"/>
+          <path d="M455 176 C480 205 540 220 555 244" marker-end="url(#w4cAr)"/>
+          <path d="M480 176 C550 200 730 210 770 244" marker-end="url(#w4cAr)"/>
+          <rect x="30" y="250" width="190" height="112" rx="10" transform="rotate(-0.8 125 306)" fill="#FFFFFF"/>
+          <rect x="245" y="250" width="190" height="112" rx="10" transform="rotate(0.6 340 306)" fill="#FFFFFF"/>
+          <rect x="460" y="250" width="190" height="112" rx="10" transform="rotate(-0.5 555 306)" fill="#FFFFFF"/>
+          <rect x="675" y="250" width="190" height="112" rx="10" transform="rotate(0.7 770 306)" fill="#FFFFFF"/>
+        </g>
+
+        <text class="w4cB" x="440" y="86" text-anchor="middle">THE data-zone INTERFACE</text>
+        <text class="w4cL" x="440" y="112" text-anchor="middle">in: env, zone, retention_days</text>
+        <text class="w4cL" x="440" y="134" text-anchor="middle">out: name, path</text>
+        <text class="w4cS" x="440" y="156" text-anchor="middle">callers never see what is inside</text>
+
+        <text class="w4cA" x="125" y="272" text-anchor="middle">AWS</text>
+        <text class="w4cL" x="125" y="292" text-anchor="middle">aws_s3_bucket</text>
+        <text class="w4cS" x="125" y="310" text-anchor="middle">hashicorp/aws, major 6</text>
+        <text class="w4cA" x="125" y="330" text-anchor="middle">force-new: bucket</text>
+        <text class="w4cS" x="125" y="348" text-anchor="middle">region arg since 6.0.0</text>
+
+        <text class="w4cA" x="340" y="272" text-anchor="middle">GOOGLE CLOUD</text>
+        <text class="w4cL" x="340" y="292" text-anchor="middle">google_storage_bucket</text>
+        <text class="w4cS" x="340" y="310" text-anchor="middle">hashicorp/google, major 8</text>
+        <text class="w4cA" x="340" y="330" text-anchor="middle">ForceNew: name, location</text>
+        <text class="w4cS" x="340" y="348" text-anchor="middle">set in the provider schema</text>
+
+        <text class="w4cA" x="555" y="272" text-anchor="middle">SNOWFLAKE</text>
+        <text class="w4cL" x="555" y="292" text-anchor="middle">snowflake_database</text>
+        <text class="w4cS" x="555" y="310" text-anchor="middle">snowflakedb/snowflake</text>
+        <text class="w4cS" x="555" y="326" text-anchor="middle">major 2</text>
+        <text class="w4cA" x="555" y="346" text-anchor="middle">force-new: read the docs</text>
+
+        <text class="w4cA" x="770" y="272" text-anchor="middle">DATABRICKS</text>
+        <text class="w4cL" x="770" y="292" text-anchor="middle">databricks_catalog</text>
+        <text class="w4cS" x="770" y="310" text-anchor="middle">databricks/databricks</text>
+        <text class="w4cS" x="770" y="326" text-anchor="middle">major 1</text>
+        <text class="w4cA" x="770" y="346" text-anchor="middle">force-new: storage_root</text>
+
+        <text class="w4cN" x="30" y="394">Same interface, four resource types. Read what forces a rebuild before you wire a module to real data.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - the contract stays put; the force-new argument underneath is what decides whether a rename is an edit or a rebuild</figcaption>
+    </figure>
+
+    <details class="card">
+      <summary><span class="mode live">Live</span>One zone module, four providers<span class="mini">4 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>Each box below is the resource you would put inside <code>modules/data-zone/main.tf</code> for one platform. They are shown, not applied: they need cloud accounts, and each needs more arguments than the ones listed here. Versions come from the public registry on 2026-11-03; provider majors move, so re-verify before relying on them.</p>
+        <div class="prompt-box"><span class="label">Shown, not applied · AWS object storage</span># provider: hashicorp/aws, major 6 at the time of writing
+resource "aws_s3_bucket" "zone" {
+  bucket = "larkspur-${var.env}-${var.zone}"   # forces new resource
+  region = "eu-west-1"                         # per-resource region, added in 6.0.0
+  # other required arguments omitted
+}</div>
+        <p>On AWS, <code>bucket</code> is marked "Forces new resource" in the provider docs: rename a zone and Terraform plans to destroy the bucket and create a new one. Provider 6.0.0 added a <code>region</code> argument to most resources, so one configuration can place resources in more than one region.</p>
+        <div class="prompt-box"><span class="label">Shown, not applied · Google Cloud Storage</span># provider: hashicorp/google, major 8 at the time of writing
+resource "google_storage_bucket" "zone" {
+  name     = "larkspur-${var.env}-${var.zone}"   # ForceNew in the schema
+  location = "EU"                                # ForceNew in the schema
+  # other required arguments omitted
+}</div>
+        <p>On Google Cloud, the docs say a bucket's location cannot be changed after creation, and the provider's source schema sets <code>ForceNew</code> on both <code>name</code> and <code>location</code>.</p>
+        <div class="prompt-box"><span class="label">Shown, not applied · Snowflake database</span># provider: snowflakedb/snowflake, major 2 at the time of writing
+resource "snowflake_database" "zone" {
+  name = "LARKSPUR_${upper(var.env)}_${upper(var.zone)}"   # unique in the account
+  # other required arguments omitted
+}</div>
+        <p>On Snowflake, <code>name</code> must be unique for your account. Note the source address: the provider moved from the Snowflake-Labs organisation to snowflakedb in 2025. Existing state still points at the old address, and the migration guide's fix is one command, <code>terraform state replace-provider Snowflake-Labs/snowflake snowflakedb/snowflake</code>. The provider documentation read for this page does not mark which <code>snowflake_database</code> arguments force replacement, so check the current docs before renaming one.</p>
+        <div class="prompt-box"><span class="label">Shown, not applied · Databricks Unity Catalog</span># provider: databricks/databricks, major 1 at the time of writing
+resource "databricks_catalog" "zone" {
+  name         = "larkspur_${var.env}_${var.zone}"
+  storage_root = "s3://larkspur-${var.env}-lake/${var.zone}"   # change forces a new resource
+  # other required arguments omitted
+}</div>
+        <p>On Databricks, a catalog is the top level of Unity Catalog's 3-level namespace. The docs say a change to <code>storage_root</code> forces creation of a new resource; <code>name</code> is not marked that way.</p>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary><span class="mode self">Self-study</span>required_providers in a multi-provider module<span class="mini">3 min</span><span class="caret">▶</span></summary>
+      <div class="body">
+        <p>A module that uses more than one provider lists each in its own <code>required_providers</code> block, with a source address of the form <code>namespace/type</code> and a constraint per provider. The namespace is not decoration: <code>hashicorp/aws</code>, <code>snowflakedb/snowflake</code> and <code>databricks/databricks</code> are three different publishers, and the Snowflake move above shows that a namespace can change under a config that never did.</p>
+        <p>The pattern for modules is a wide constraint, such as <code>&gt;= 2.4, &lt; 3.0</code> in tonight's module, so the module works for many callers, and a tighter one in the root, such as <code>~&gt; 2.5</code>, where the team decides what it actually runs. This is the Associate exam's objective 2c, writing configuration with multiple providers. Session 1's config, with hashicorp/local and hashicorp/random side by side, was already a small example; provider aliases, which let one provider appear twice with different settings, are not covered on these pages.</p>
+      </div>
+    </details>
+
+    <div class="callout example">
+      <span class="ex-pill">Real world</span>
+      <p><strong>A warehouse and a lakehouse from one repository.</strong> A common data-platform shape: object storage in one cloud, warehouse databases in Snowflake, and catalogs in Databricks, all provisioned from the same repository and reviewed in the same pull requests. The modules give each a consistent naming contract, so <code>larkspur_prod_curated</code> means the same zone everywhere. The platforms themselves, how a warehouse or a lakehouse should be modelled, are taught in <a href="https://phoebefu6.github.io/learn-data-warehouse-with-phoebe/">Learn Data Warehouse with Phoebe</a> and <a href="https://phoebefu6.github.io/learn-databricks-with-phoebe/">Learn Databricks with Phoebe</a>; the AWS services in <a href="https://phoebefu6.github.io/learn-aws-with-phoebe/">Learn AWS with Phoebe</a>. This session's job is only to provision them as code.</p>
+    </div>
+  </section>
+
+  <section class="section" id="demo-1">
+    <div class="section-kicker">
+      <span class="klabel">Build-along</span>
+      <h2>One data-zone module, dev and prod</h2>
+      <span class="tag demo">★ 22 min · everyone builds</span>
+    </div>
+    <p class="lede">Priya writes the zone once and calls it twice, each time with for_each over the same three zones. Start a fresh, empty folder. Every output below was really run with Terraform 1.17.1 and hashicorp/local 2.9.1; ids, hashes and times will differ on your machine.</p>
+
+    <figure class="zoomable">
+      <svg viewBox="0 0 880 350" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The folder after apply. Root main.tf holds locals, two module calls and an output. modules/data-zone holds variables.tf for inputs, main.tf with local_file.marker, and outputs.tf with name and path. .terraform.lock.hcl is written by init. The lake folder, created by apply, holds six folders: larkspur-dev-raw, larkspur-dev-curated, larkspur-dev-serving, larkspur-prod-raw, larkspur-prod-curated and larkspur-prod-serving, each with one ZONE.txt.">
+        <defs>
+          <filter id="w4dSk" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="57" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+          <pattern id="w4dHc" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(-38)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7B42BC" stroke-width="1" opacity=".5"/></pattern>
+          <marker id="w4dAt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#0F766E" stroke-width="1.6" stroke-linecap="round"/></marker>
+        </defs>
+        <style>
+          .w4dH { font: 800 12px Inter, sans-serif; fill: #221A2E; }
+          .w4dL { font: 600 12px Inter, sans-serif; fill: #221A2E; }
+          .w4dS { font: 400 11px Inter, sans-serif; fill: #5E5470; }
+          .w4dB { font: 800 11px Inter, sans-serif; fill: #0B4F4A; }
+          .w4dA { font: 700 11px Inter, sans-serif; fill: #4A2478; }
+          .w4dN { font: 400 12px Inter, sans-serif; fill: #5E5470; }
+        </style>
+
+        <text class="w4dH" x="30" y="26">YOUR FOLDER AFTER STEP 7</text>
+
+        <g filter="url(#w4dSk)" fill="none" stroke="#221A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M62 78 L62 262 M62 96 L74 96 M62 126 L74 126 M62 236 L74 236 M62 262 L74 262"/>
+          <path d="M102 134 L102 206 M102 154 L114 154 M102 180 L114 180 M102 206 L114 206"/>
+          <rect x="425" y="56" width="430" height="254" rx="12" transform="rotate(0.4 640 183)" fill="#F4EEFB"/>
+          <rect x="440" y="98" width="120" height="56" rx="6" transform="rotate(-1.5 500 126)" fill="url(#w4dHc)"/>
+          <rect x="585" y="98" width="120" height="56" rx="6" transform="rotate(1.2 645 126)" fill="url(#w4dHc)"/>
+          <rect x="730" y="98" width="120" height="56" rx="6" transform="rotate(-1 790 126)" fill="url(#w4dHc)"/>
+          <rect x="440" y="200" width="120" height="56" rx="6" transform="rotate(1.4 500 228)" fill="url(#w4dHc)"/>
+          <rect x="585" y="200" width="120" height="56" rx="6" transform="rotate(-1.2 645 228)" fill="url(#w4dHc)"/>
+          <rect x="730" y="200" width="120" height="56" rx="6" transform="rotate(0.9 790 228)" fill="url(#w4dHc)"/>
+          <path d="M240 236 L418 236" stroke="#0F766E" marker-end="url(#w4dAt)"/>
+        </g>
+
+        <text class="w4dL" x="40" y="70">your folder (the root module)</text>
+        <text class="w4dL" x="80" y="100">main.tf</text>
+        <text class="w4dS" x="150" y="100">locals, two module calls, output</text>
+        <text class="w4dL" x="80" y="130">modules/data-zone/</text>
+        <text class="w4dL" x="120" y="158">variables.tf</text>
+        <text class="w4dS" x="230" y="158">inputs</text>
+        <text class="w4dL" x="120" y="184">main.tf</text>
+        <text class="w4dS" x="230" y="184">local_file.marker</text>
+        <text class="w4dL" x="120" y="210">outputs.tf</text>
+        <text class="w4dS" x="230" y="210">name, path</text>
+        <text class="w4dL" x="80" y="240">lake/</text>
+        <text class="w4dB" x="124" y="240">created by apply</text>
+        <text class="w4dL" x="80" y="266">.terraform.lock.hcl</text>
+        <text class="w4dS" x="230" y="266">written by init, commit it</text>
+
+        <text class="w4dA" x="440" y="80">lake/ after apply: six folders, one ZONE.txt each</text>
+        <text class="w4dS" x="500" y="176" text-anchor="middle">larkspur-dev-raw</text>
+        <text class="w4dS" x="645" y="176" text-anchor="middle">larkspur-dev-curated</text>
+        <text class="w4dS" x="790" y="176" text-anchor="middle">larkspur-dev-serving</text>
+        <text class="w4dS" x="500" y="278" text-anchor="middle">larkspur-prod-raw</text>
+        <text class="w4dS" x="645" y="278" text-anchor="middle">larkspur-prod-curated</text>
+        <text class="w4dS" x="790" y="278" text-anchor="middle">larkspur-prod-serving</text>
+
+        <text class="w4dN" x="30" y="336">One module folder, called twice with for_each over three zones: six resources, six folders.</text>
+      </svg>
+      <figcaption>🔍 Click to zoom - four files of code on the left, six real objects on the right; the module is why the right side cannot drift apart</figcaption>
+    </figure>
+
+    <div class="steps">
+      <div class="step">
+        <p><strong>Write the module's inputs.</strong> Create <code>modules/data-zone/variables.tf</code>. Three variables, each with a type and a description; <code>retention_days</code> has a default, so a caller may leave it out.</p>
+        <div class="prompt-box good"><span class="label">★ Step 1 · modules/data-zone/variables.tf</span>variable "env" {
+  type        = string
+  description = "Environment name, dev or prod"
+}
+
+variable "zone" {
+  type        = string
+  description = "raw, curated or serving"
+}
+
+variable "retention_days" {
+  type        = number
+  description = "How long files stay in the zone"
+  default     = 30
+}</div>
+      </div>
+      <div class="step">
+        <p><strong>Write what it builds and what it returns.</strong> The module states its own wide provider constraint. <code>path.root</code> is the root module's folder, so every zone lands under one <code>lake/</code> no matter which module call made it. The outputs are the only two values a caller will ever see.</p>
+        <div class="prompt-box good"><span class="label">★ Step 2 · modules/data-zone/main.tf</span>terraform {
+  required_version = "&gt;= 1.5.0"
+  required_providers {
+    local = { source = "hashicorp/local", version = "&gt;= 2.4, &lt; 3.0" }
+  }
+}
+
+locals {
+  name = "larkspur-${var.env}-${var.zone}"
+}
+
+resource "local_file" "marker" {
+  filename = "${path.root}/lake/${local.name}/ZONE.txt"
+  content  = "zone=${var.zone} env=${var.env} retention_days=${var.retention_days}\n"
+}</div>
+        <div class="prompt-box good"><span class="label">★ Step 2 · modules/data-zone/outputs.tf</span>output "name" {
+  value = local.name
+}
+
+output "path" {
+  value = local_file.marker.filename
+}</div>
+      </div>
+      <div class="step">
+        <p><strong>Call it twice from the root.</strong> Save this as <code>main.tf</code> in the root folder. The retention per zone lives once, in <code>locals.zones</code>; dev and prod differ only in <code>env</code>. With for_each on a module call, <code>module.dev_zone</code> becomes a map of module instances, which is why the output loops over it.</p>
+        <div class="prompt-box good"><span class="label">★ Step 3 · main.tf</span>terraform {
+  required_providers {
+    local = { source = "hashicorp/local", version = "~&gt; 2.5" }
+  }
+}
+
+locals {
+  zones = {
+    raw     = 30
+    curated = 365
+    serving = 90
+  }
+}
+
+module "dev_zone" {
+  source         = "./modules/data-zone"
+  for_each       = local.zones
+  env            = "dev"
+  zone           = each.key
+  retention_days = each.value
+}
+
+module "prod_zone" {
+  source         = "./modules/data-zone"
+  for_each       = local.zones
+  env            = "prod"
+  zone           = each.key
+  retention_days = each.value
+}
+
+output "zone_names" {
+  value = concat([for m in module.dev_zone : m.name], [for m in module.prod_zone : m.name])
+}</div>
+      </div>
+      <div class="step">
+        <p><strong>Initialise.</strong> There is a new first stage: "Initializing modules...". Then read the "Finding" line: init has merged the module's constraint with the root's into one, and picked v2.9.1 from inside it.</p>
+        <div class="prompt-box good"><span class="label">★ Step 4 · terraform init (trimmed)</span>$ terraform init
+Initializing the backend...
+Initializing modules...
+- dev_zone in modules/data-zone
+- prod_zone in modules/data-zone
+Initializing provider plugins...
+- Finding hashicorp/local versions matching "&gt;= 2.4.0, ~&gt; 2.5, &lt; 3.0.0"...
+- Installing hashicorp/local v2.9.1...
+- Installed hashicorp/local v2.9.1 (signed by HashiCorp)
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+...</div>
+      </div>
+      <div class="step">
+        <p><strong>Ask who wants which provider.</strong> <code>terraform providers</code> prints the requirement tree: the root's constraint at the top, each module call's underneath. This is the command to reach for whenever init refuses a version.</p>
+        <div class="prompt-box good"><span class="label">★ Step 5 · terraform providers</span>$ terraform providers
+
+Providers required by configuration:
+.
+├── provider[registry.terraform.io/hashicorp/local] ~&gt; 2.5
+├── module.prod_zone
+│   └── provider[registry.terraform.io/hashicorp/local] &gt;= 2.4.0, &lt; 3.0.0
+└── module.dev_zone
+    └── provider[registry.terraform.io/hashicorp/local] &gt;= 2.4.0, &lt; 3.0.0</div>
+      </div>
+      <div class="step">
+        <p><strong>Open the lock file.</strong> One provider block, with the version chosen, the merged constraints and the hashes. Search it for <code>data-zone</code>: you will not find it, because the lock file tracks providers only. Commit this file.</p>
+        <div class="prompt-box good"><span class="label">★ Step 6 · .terraform.lock.hcl (trimmed)</span># This file is maintained automatically by "terraform init".
+# Manual edits may be lost in future updates.
+
+provider "registry.terraform.io/hashicorp/local" {
+  version     = "2.9.1"
+  constraints = "&gt;= 2.4.0, ~&gt; 2.5, &lt; 3.0.0"
+  hashes = [
+    "h1:OZGJN0LSSat5QIxZPxDXtVr4XpHb2oG7cVKJhSqBFIE=",
+    "zh:25606c7a5e308144fb627f6e31611bb52ff72bb9ae2d27af39673ab1a6b3c1bf",
+    "zh:2568c4ef4dab31821f6f7040af0d1a2aa2b9455b8d9cc546598b791b8ada34cd",
+...</div>
+      </div>
+      <div class="step">
+        <p><strong>Apply, then list the state.</strong> Six markers, created in parallel, so the order of the "Creation complete" lines is not the order you wrote them. Then <code>terraform state list</code> shows the long module addresses from Part 1.</p>
+        <div class="prompt-box good"><span class="label">★ Step 7 · apply and state list (trimmed)</span>$ terraform apply -auto-approve
+...
+      + filename             = "./lake/larkspur-dev-curated/ZONE.txt"
+      + filename             = "./lake/larkspur-dev-raw/ZONE.txt"
+...
+module.prod_zone["curated"].local_file.marker: Creation complete after 0s [id=1b71ccc17b6063f2950a8b10506a2b59f78c2d48]
+module.dev_zone["raw"].local_file.marker: Creation complete after 0s [id=5c759187767bc174c5c0ac31b150de23b3fb99d1]
+module.dev_zone["serving"].local_file.marker: Creation complete after 0s [id=adf707491db8d1257491c8bad80c41f218151274]
+module.prod_zone["raw"].local_file.marker: Creation complete after 0s [id=86419ec304505fde21ecf4532962c6252295ef18]
+module.dev_zone["curated"].local_file.marker: Creation complete after 0s [id=3edcd67f52e40eaf609713752ee4632c230124eb]
+module.prod_zone["serving"].local_file.marker: Creation complete after 0s [id=c20813c48604ea4cbd42f44d5e35adfc85dd96ae]
+Apply complete! Resources: 6 added, 0 changed, 0 destroyed.
+Outputs:
+...
+  "larkspur-dev-curated",
+  "larkspur-dev-raw",
+  "larkspur-dev-serving",
+  "larkspur-prod-curated",
+  "larkspur-prod-raw",
+  "larkspur-prod-serving",
+...
+
+$ terraform state list
+module.dev_zone["curated"].local_file.marker
+module.dev_zone["raw"].local_file.marker
+module.dev_zone["serving"].local_file.marker
+module.prod_zone["curated"].local_file.marker
+module.prod_zone["raw"].local_file.marker
+module.prod_zone["serving"].local_file.marker</div>
+      </div>
+      <div class="step">
+        <p><strong>Break it on purpose: ask for a version that does not exist.</strong> In a separate scratch folder, write a config whose <code>required_providers</code> asks for hashicorp/local <code>~&gt; 3.0</code>, and run init. The run below used a one-block scratch config, so only that one constraint appears. In the Larkspur folder init would merge it with the module's <code>&lt; 3.0</code> first, and the overlap would be empty before the registry is even consulted.</p>
+        <div class="prompt-box good"><span class="label">★ Step 8 · terraform init with ~&gt; 3.0</span>$ terraform init
+Initializing the backend...
+
+Initializing provider plugins...
+- Finding hashicorp/local versions matching "~&gt; 3.0"...
+
+Error: Failed to query available provider packages
+
+Could not retrieve the list of available versions for provider
+hashicorp/local: no available releases match the given constraints ~&gt; 3.0
+
+To see which modules are currently depending on hashicorp/local and what
+versions are specified, run the following command:
+    terraform providers</div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <p><strong>Keep the folder.</strong> Session 5 reads plans like a reviewer, and the most expensive lines in a plan are the ones that destroy something inside a module. Every command here works the same with tofu, if that is what you installed.</p>
+    </div>
+  </section>
+
+  <section class="section" id="exercise">
+    <div class="section-kicker">
+      <span class="klabel">Homework</span>
+      <h2>Before session 5</h2>
+      <span class="tag exercise">30 min</span>
+    </div>
+    <ol>
+      <li><strong>Change one environment only.</strong> Give prod's raw zone a different retention without touching dev. Where does the change belong: the module, <code>locals.zones</code>, or a new input? Run <code>terraform plan</code> and check that only <code>module.prod_zone["raw"]</code> appears.</li>
+      <li><strong>Try to break the boundary.</strong> Inside <code>modules/data-zone/main.tf</code>, refer to <code>local.zones</code> and run <code>terraform validate</code>. Read the error, then write one sentence on why a module that could see its caller's locals would be harder to reuse.</li>
+      <li><strong>Predict, then check, a constraint.</strong> Change the root constraint to <code>~&gt; 2.9.0</code>, predict what init will choose, and run <code>terraform init -upgrade</code>. Then try <code>= 2.4.0</code> in the root and explain the result using the module's own constraint.</li>
+      <li><strong>Write a README.</strong> Add <code>modules/data-zone/README.md</code> with the three inputs, their types and defaults, and the two outputs. If a colleague could use the module from the README alone, it is done.</li>
+    </ol>
+  </section>
+
+  <section class="section" id="quiz">
+    <div class="section-kicker">
+      <span class="klabel">Check yourself</span>
+      <h2>Three questions</h2>
+    </div>
+    <p>Clear all three and session 4 gets stamped in your passport.</p>
+
+    <div class="quiz-q" data-answer="1">
+      <p class="qtext">1 · A root config asks for hashicorp/local <code>~&gt; 2.5</code>. Which releases does that allow?</p>
+      <button class="qopt" type="button">A · Only 2.5.0 exactly</button>
+      <button class="qopt" type="button">B · 2.5 and any later 2.x release, such as 2.9.1, but not 3.0</button>
+      <button class="qopt" type="button">C · 2.5.0 to 2.5.x only, such as 2.5.3, but not 2.6</button>
+      <button class="qopt" type="button">D · Any release from 2.5 upwards, including 3.x</button>
+      <p class="qwhy"><code>~&gt;</code> lets only the right-most component you wrote increment. With two components, 2.5, the minor version can rise, so 2.6 and 2.9.1 are allowed and 3.0 is not. C is the answer for <code>~&gt; 2.5.0</code>, which has three components; HashiCorp's own example is <code>~&gt; 1.0.4</code>, which allows 1.0.10 but not 1.1.0.</p>
+    </div>
+
+    <div class="quiz-q" data-answer="3">
+      <p class="qtext">2 · Your root calls a module from a registry. Does <code>.terraform.lock.hcl</code> pin that module's version?</p>
+      <button class="qopt" type="button">A · Yes, it records every dependency init downloads</button>
+      <button class="qopt" type="button">B · Yes, but only after <code>terraform init -upgrade</code></button>
+      <button class="qopt" type="button">C · Only if the module is stored in the same repository</button>
+      <button class="qopt" type="button">D · No; it tracks providers only, so pin a registry module with the <code>version</code> argument in its <code>module</code> block</button>
+      <p class="qwhy">The docs are explicit that the lock file tracks only provider dependencies and that Terraform does not remember version selections for remote modules. Tonight's lock file had one provider block and no trace of <code>data-zone</code>. A local module has no version at all: it is whatever is on disk in the same commit.</p>
+    </div>
+
+    <div class="quiz-q" data-answer="0">
+      <p class="qtext">3 · From the root, what can a caller read from inside <code>module.dev_zone["raw"]</code>?</p>
+      <button class="qopt" type="button">A · Only its outputs, here <code>name</code> and <code>path</code>; its locals and resources stay inside</button>
+      <button class="qopt" type="button">B · Any local or resource, using the module path, such as <code>module.dev_zone["raw"].local.name</code></button>
+      <button class="qopt" type="button">C · Its input variables only, because outputs are for the CLI</button>
+      <button class="qopt" type="button">D · Nothing; modules cannot return values to the root</button>
+      <p class="qwhy">Outputs are the module's only way out, which is why the root builds <code>zone_names</code> from <code>m.name</code>. The trap in B is that state does use long addresses like <code>module.dev_zone["raw"].local_file.marker</code>; that is how Terraform tracks the object, not something your configuration can read from outside.</p>
+    </div>
+
+    <p class="quiz-score"></p>
+  </section>
+
+  <section class="section" id="official">
+    <div class="section-kicker">
+      <span class="klabel">Sources covered</span>
+      <h2>What this session teaches, and where it came from</h2>
+    </div>
+    <div class="covered">
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform Associate (004) exam content list</span><span class="note">Objectives 2a (install and version providers), 2c (multiple providers), 5a, 5b, 5c, 5d (module sources, variable scope, using modules, module versions), read at developer.hashicorp.com</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform docs: version constraints and the dependency lock file</span><span class="note">The seven operators and the <code>~&gt;</code> examples; lock file records version, constraints and checksums, providers only, commit it; read at source</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Provider docs and registry versions</span><span class="note">aws 6.x, google 8.x, snowflakedb 2.x, databricks 1.x and their force-new arguments, read 2026-11-03; re-verify before relying on them</span></div>
+      <div class="covered-row"><span class="status pill solid">✓</span><span class="name">Terraform 1.17.1 with hashicorp/local 2.9.1</span><span class="note">Every command output on this page, really run; ids, hashes and times will differ on your machine</span></div>
+      <div class="covered-row"><span class="status pill light">◐</span><span class="name">Snowflake provider move</span><span class="note">The migration guide dates it "03-04-2025", which can be read as March or April, so this page says only "in 2025"</span></div>
+      <div class="covered-row"><span class="status pill light">◐</span><span class="name">Larkspur Freight, Priya and the zones</span><span class="note">Constructed for teaching; retention days and names are illustrative, not measurements</span></div>
+    </div>
+    <p class="mono" style="margin-top:14px">Every fact on this page, and its verification tier, is recorded in the course's source map.</p>
+  </section>
+
+  <section class="cheat" id="cheatsheet">
+    <h3>Session 4 cheat sheet <span>· pin this</span></h3>
+    <div class="grid-2">
+      <div class="cheat-item"><b>Module shape</b><span><code>variables.tf</code> in, <code>main.tf</code> builds, <code>outputs.tf</code> out, a README for people.</span></div>
+      <div class="cheat-item"><b>Scope</b><span>A module sees only its own variables. A caller sees only its outputs.</span></div>
+      <div class="cheat-item"><b>Addresses</b><span><code>module.dev_zone["raw"].local_file.marker</code>: call, key, resource.</span></div>
+      <div class="cheat-item"><b>~&gt;</b><span>Only the right-most written component may rise. <code>~&gt; 2.5</code> = 2.5 up to, not including, 3.0.</span></div>
+      <div class="cheat-item"><b>Lock file</b><span>Providers only: version, constraints, hashes. Commit it. <code>init -upgrade</code> to move within constraints.</span></div>
+      <div class="cheat-item"><b>When init refuses</b><span>Run <code>terraform providers</code> to see which module asked for what.</span></div>
+    </div>
+  </section>
+
+  <div class="callout next">
+    <span class="nx-pill">Next session</span>
+    <p>Larkspur's platform now lives in modules, which makes every plan more powerful and more dangerous to wave through. Session 5 teaches you to read a plan like a reviewer: the six symbols, the line that says "forces replacement", the lifecycle settings that steer a rebuild, and a plan simulator where you change the config and watch the plan, the apply order and the data at risk move.</p>
+  </div>
+
+  <footer class="pagefoot">
+    <span>Session 4 of 6 · learn-terraform-with-phoebe · by Phoebe Fu &nbsp;·&nbsp; 📚 <a href="https://phoebefu6.github.io/learn-with-phoebe/">Learn with Phoebe ↗</a></span>
+    <span><a href="03-state-is-the-source-of-truth.html">← Prev: State is the source of truth</a> &nbsp;·&nbsp; <a href="05-read-a-plan-like-a-reviewer.html">Next: Read a plan like a reviewer →</a></span>
+  </footer>
+
+</main>
+
+<script src="../assets/app.js?v=1"></script>
+</body>
+</html>

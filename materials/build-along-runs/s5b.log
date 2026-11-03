@@ -1,0 +1,52 @@
+Terraform will perform the following actions:
+
+  # terraform_data.raw_zone must be replaced
+-/+ resource "terraform_data" "raw_zone" {
+      ~ id               = "41e49c6e-347c-dc64-8b9f-dc72ab0585d3" -> (known after apply)
+      ~ input            = {
+            name   = "larkspur-prod-raw"
+          ~ region = "eu-west-1" -> "eu-central-1"
+            tags   = "team=data"
+        }
+      ~ output           = {
+          - name   = "larkspur-prod-raw"
+          - region = "eu-west-1"
+          - tags   = "team=data"
+        } -> (known after apply)
+      ~ triggers_replace = [
+          ~ "eu-west-1" -> "eu-central-1",
+        ]
+    }
+
+Plan: 1 to add, 0 to change, 1 to destroy.
+# added lifecycle { prevent_destroy = true }
+Error: Instance cannot be destroyed
+
+  on main.tf line 1:
+   1: resource "terraform_data" "raw_zone" {
+
+Resource terraform_data.raw_zone has lifecycle.prevent_destroy set, but the
+plan calls for this resource to be destroyed. To avoid this error and
+continue with the plan, either disable lifecycle.prevent_destroy or reduce
+the scope of the plan using the -target option.
+[exit 1]
+# swapped to lifecycle { create_before_destroy = true }
+plan. Resource actions are indicated with the following symbols:
++/- create replacement and then destroy
+  # terraform_data.raw_zone must be replaced
++/- resource "terraform_data" "raw_zone" {
+      ~ id               = "41e49c6e-347c-dc64-8b9f-dc72ab0585d3" -> (known after apply)
+      ~ input            = {
+          ~ region = "eu-west-1" -> "eu-central-1"
+      ~ output           = {
+          - name   = "larkspur-prod-raw"
+          - region = "eu-west-1"
+          - tags   = "team=data"
+      ~ triggers_replace = [
+Plan: 1 to add, 0 to change, 1 to destroy.
+[exit 0]
+terraform_data.raw_zone: Creating...
+terraform_data.raw_zone: Creation complete after 0s [id=6675ecfc-259a-be0a-cbdd-2b7d54838823]
+terraform_data.raw_zone (deposed object d29179ca): Destroying... [id=41e49c6e-347c-dc64-8b9f-dc72ab0585d3]
+terraform_data.raw_zone: Destruction complete after 0s
+Apply complete! Resources: 1 added, 0 changed, 1 destroyed.
